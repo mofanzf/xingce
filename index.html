@@ -450,7 +450,7 @@
       <textarea id="backupArea" style="display:none;width:100%;min-height:90px;margin-top:10px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--muted);font-size:11px;padding:10px;font-family:var(--mono);resize:vertical"></textarea>
     </div>
     <div class="card">
-      <div class="card-title">自动同步</div>
+      <div class="card-title">自动同步 <span style="font-weight:400;font-size:11px;color:var(--muted)">v3 · 私有仓库</span></div>
       <div class="sync-state off" id="cloudState"><span class="dot"></span><span id="cloudStateText">未配置</span></div>
       <div class="small" style="line-height:1.75;margin-top:9px">数据只存在你 GitHub 账号下的一个<b>私有仓库</b>（<code>xingce-data</code>，第一次自动创建），别人搜不到也打不开。token 只需勾 <b>repo</b> 权限。</div>
       <div class="sync-row" style="margin-top:10px">
@@ -460,6 +460,9 @@
       <div class="sync-row" style="margin-top:9px">
         <button class="btn btn-ghost" id="btnCloudNow" type="button" style="flex:1;min-height:42px;font-size:13.5px">立即同步</button>
         <button class="btn btn-ghost" id="btnCloudOff" type="button" style="min-height:42px;padding:0 14px;font-size:13px">断开</button>
+      </div>
+      <div class="small" style="margin-top:10px;line-height:1.7;color:var(--muted)">
+        报错或界面没更新？<a href="javascript:void(0)" id="btnHardReload" style="color:var(--accent);text-decoration:underline">点这里清除缓存、载入最新版</a>
       </div>
     </div>
   </section>
@@ -1798,6 +1801,8 @@
           signal: ctrl.signal
         });
       } finally { clearTimeout(to); }
+      const scopes = res.headers.get('x-oauth-scopes');
+      if (scopes !== null) this.scope = scopes;
       if (!res.ok) {
         let msg = 'HTTP ' + res.status;
         try {
@@ -1806,6 +1811,10 @@
         } catch (e) {}
         if (res.status === 401) msg += '（token 无效或已过期）';
         if (res.status === 403) msg += '（token 没有 repo 权限，或请求过于频繁）';
+        if (res.status === 404) {
+          msg += '：' + path;
+          if (scopes !== null) msg += '（该 token 权限：' + (scopes || '空') + '）';
+        }
         throw new Error(msg);
       }
       if (res.status === 204) return null;
@@ -1833,7 +1842,15 @@
         });
       } finally { clearTimeout(to); }
       if (r.status === 404) {
-        await this.api('POST', '/user/repos', { name: DATA_REPO, description: DATA_DESC, private: true, auto_init: true });
+        try {
+          await this.api('POST', '/user/repos', { name: DATA_REPO, description: DATA_DESC, private: true, auto_init: true });
+        } catch (e) {
+          const em = String(e && e.message || '');
+          if (/422|已存在|already exists/i.test(em)) { /* 已存在，继续 */ }
+          else if (/40[13]/.test(em)) throw new Error('token 权限不足，创建不了私有仓库（需要在 token 里勾上 repo 权限）：' + em);
+          else throw e;
+        }
+        await new Promise(ok => setTimeout(ok, 1200));
       } else if (!r.ok) {
         throw new Error('HTTP ' + r.status + '（读不到私有仓库 ' + DATA_REPO + '）');
       }
@@ -1848,6 +1865,7 @@
       };
     },
     async pull() {
+      if (!this.user) throw new Error('还没拿到 GitHub 用户名，请点「保存」重试');
       const url = 'https://api.github.com/repos/' + this.user + '/' + DATA_REPO + '/contents/' + DATA_FILE;
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), 15000);
@@ -1864,6 +1882,7 @@
       return { records: Array.isArray(o.records) ? o.records : [], tombs: o.tombs || {}, sha: j.sha || null };
     },
     async push(sha) {
+      if (!this.user) throw new Error('还没拿到 GitHub 用户名，请点「保存」重试');
       const body = { message: 'sync ' + new Date().toISOString(), content: strToB64(JSON.stringify(cloudPay())) };
       if (sha) body.sha = sha;
       await this.api('PUT', '/repos/' + this.user + '/' + DATA_REPO + '/contents/' + DATA_FILE, body);
@@ -2078,6 +2097,19 @@
     });
     $('cloudToken').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('btnCloudConnect').click(); } });
     $('btnCloudNow').addEventListener('click', () => cloud.round(true));
+    if ($('btnHardReload')) $('btnHardReload').addEventListener('click', async () => {
+      try {
+        if (window.caches) {
+          const ks = await caches.keys();
+          await Promise.all(ks.map(k => caches.delete(k)));
+        }
+        if ('serviceWorker' in navigator) {
+          const rs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(rs.map(x => x.unregister()));
+        }
+      } catch (e) {}
+      location.replace(location.pathname + '?v=' + Date.now());
+    });
     $('btnCloudOff').addEventListener('click', () => {
       cloud.stop();
       cloud.token = '';
