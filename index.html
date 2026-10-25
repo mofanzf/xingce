@@ -1597,7 +1597,7 @@
     const d = new Date(ts);
     return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0');
   }
-  // 局域网状态不再展示（界面只留一张「自动同步」卡片），同步本身照常在后台跑
+  // 界面只留一张「自动同步」卡片，本机同步在后台照常跑
   function updateSyncUI() {}
   function refreshAfterSync() {
     const active = document.querySelector('.tab.active');
@@ -1615,17 +1615,11 @@
         this.auto = true;
         this.base = location.origin;
       } else {
-        // 电脑上直接双击 index.html 打开时，默认连本机的电脑端；手机上改成电脑显示的地址
+        // 电脑上直接双击 index.html 打开时，连本机的电脑端（局域网/手机不再使用这条）
         this.base = cfg.base ? normBase(cfg.base) : 'http://127.0.0.1:7788';
       }
       syncPoke = () => { this.schedule(600); if (cloud.token) cloud.schedule(3000); };
       updateSyncUI();
-      if (this.auto) {
-        fetch('/api/info', { cache: 'no-store' })
-          .then(r => r.json())
-          .then(d => { if (d && d.lan) { this.lan = d.lan; updateSyncUI(); } })
-          .catch(() => {});
-      }
       this.start();
     },
     start() {
