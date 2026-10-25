@@ -450,36 +450,16 @@
       <textarea id="backupArea" style="display:none;width:100%;min-height:90px;margin-top:10px;border-radius:10px;background:var(--bg);border:1px solid var(--line);color:var(--muted);font-size:11px;padding:10px;font-family:var(--mono);resize:vertical"></textarea>
     </div>
     <div class="card">
-      <div class="card-title">电脑 · 手机同步</div>
-      <div class="sync-state" id="syncState"><span class="dot"></span><span id="syncStateText">正在检测电脑端…</span></div>
-      <div class="small" id="syncHint" style="line-height:1.8;margin:8px 0 10px">电脑上打开「行测刷题打卡.exe」，手机连同一个 WiFi 就会自动同步，两边记录按时间合并、不会互相覆盖。</div>
-      <div class="sync-addr" id="syncAddr">—</div>
+      <div class="card-title">自动同步</div>
+      <div class="sync-state off" id="cloudState"><span class="dot"></span><span id="cloudStateText">未配置</span></div>
       <div class="sync-row" style="margin-top:10px">
-        <input class="sync-input" id="syncUrl" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="http://192.168.1.5:7788">
-        <button class="btn btn-ghost" id="btnSyncSave" type="button" style="min-height:42px;padding:0 14px;font-size:13px">保存</button>
+        <input class="sync-input" id="cloudToken" type="password" autocomplete="off" spellcheck="false" placeholder="填一次 GitHub token，之后自动记住">
+        <button class="btn btn-primary" id="btnCloudConnect" type="button" style="min-height:42px;padding:0 14px;font-size:13px">保存</button>
       </div>
       <div class="sync-row" style="margin-top:9px">
-        <button class="btn btn-primary" id="btnSyncNow" type="button" style="flex:1;min-height:42px;font-size:13.5px">立即同步</button>
-        <button class="btn btn-ghost" id="btnSyncCopy" type="button" style="flex:1;min-height:42px;font-size:13.5px">复制电脑地址</button>
-      </div>
-      <div class="sync-row" style="margin-top:9px">
-        <button class="btn btn-ghost" id="btnSyncCode" type="button" style="flex:1;min-height:42px;font-size:13px">复制同步码</button>
-        <button class="btn btn-ghost" id="btnSyncPaste" type="button" style="flex:1;min-height:42px;font-size:13px">粘贴合并</button>
-      </div>
-      <div class="small" style="line-height:1.8;margin-top:8px">不在同一个网络（手机用流量、在外面、在单位）时：点「复制同步码」→ 用微信发到另一台设备 → 在那台上点「粘贴合并」。记录同样按时间合并，两边都不会丢。</div>
-
-      <div class="card-title" style="margin-top:18px">跨网络 · GitHub 云同步（免费，自动）</div>
-      <div class="small" style="line-height:1.8;margin:8px 0 10px">用你自己 GitHub 账号下的一个<b>私人 Gist</b> 当中转：两台设备填同一个 token，每 60 秒自动互换记录，不用电脑开着、也不用同一个网络。token 只存在本机，随时可「断开」。</div>
-      <div class="sync-row">
-        <input class="sync-input" id="cloudToken" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴 GitHub token（只需 gist 权限）">
-        <button class="btn btn-ghost" id="btnCloudConnect" type="button" style="min-height:42px;padding:0 14px;font-size:13px">连接</button>
-      </div>
-      <div class="sync-row" style="margin-top:9px">
-        <button class="btn btn-primary" id="btnCloudNow" type="button" style="flex:1;min-height:42px;font-size:13.5px">立即云同步</button>
+        <button class="btn btn-ghost" id="btnCloudNow" type="button" style="flex:1;min-height:42px;font-size:13.5px">立即同步</button>
         <button class="btn btn-ghost" id="btnCloudOff" type="button" style="min-height:42px;padding:0 14px;font-size:13px">断开</button>
       </div>
-      <div class="sync-state off" id="cloudState" style="margin-top:10px"><span class="dot"></span><span id="cloudStateText">未配置云同步</span></div>
-      <div class="small" id="cloudHint" style="line-height:1.8;margin-top:8px">怎么拿 token：GitHub → Settings → Developer settings → Personal access tokens → <b>Tokens (classic)</b> → Generate new token → 只勾 <b>gist</b> → 复制 <code>ghp_...</code> 粘到上面。电脑、手机各填一次，云端仓库会自动建好。</div>
     </div>
   </section>
 
@@ -1617,28 +1597,8 @@
     const d = new Date(ts);
     return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0');
   }
-  function updateSyncUI() {
-    const st = $('syncState'), tx = $('syncStateText'), addr = $('syncAddr');
-    if (!sync.base) {
-      st.className = 'sync-state off';
-      tx.textContent = '未连接：先打开电脑端，或填写电脑地址';
-      addr.style.display = 'none';
-      return;
-    }
-    addr.style.display = 'block';
-    addr.textContent = (sync.auto && sync.lan ? '手机打开：' + sync.lan : sync.base);
-    if (sync.ok) {
-      st.className = 'sync-state on';
-      tx.textContent = '已连接 · 最近同步 ' + fmtTime(sync.lastOk) + (sync.rev ? ' · 累计合并 ' + sync.rev + ' 次' : '');
-    } else {
-      st.className = 'sync-state off';
-      tx.textContent = '暂时连不上电脑端，记录先存在本机，恢复后自动补同步';
-    }
-  }
-  function syncTarget() {
-    if (sync.auto && sync.lan) return sync.lan;
-    return sync.base;
-  }
+  // 局域网状态不再展示（界面只留一张「自动同步」卡片），同步本身照常在后台跑
+  function updateSyncUI() {}
   function refreshAfterSync() {
     const active = document.querySelector('.tab.active');
     const name = active ? active.dataset.tab : 'home';
@@ -1646,49 +1606,6 @@
     else if (name === 'progress') renderProgressTabs();
     else if (name === 'stats') renderStats();
     else renderHome();
-  }
-  // 复制到剪贴板：优先 Clipboard API，老浏览器/非安全上下文退回 execCommand
-  function copyText(t) {
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(t);
-    } catch (e) {}
-    return new Promise((res, rej) => {
-      try {
-        const ta = document.createElement('textarea');
-        ta.value = t;
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.select();
-        const ok = document.execCommand('copy');
-        document.body.removeChild(ta);
-        ok ? res() : rej(new Error('copy failed'));
-      } catch (e) { rej(e); }
-    });
-  }
-  // 同步码：一行文本，微信/QQ/备忘录都能传；跨网络（不同 WiFi、手机流量）时用它搬运记录
-  function syncCodeMake() {
-    return 'XC1:' + JSON.stringify({ v: 1, records: getRecords(), tombs: getTombs() });
-  }
-  function syncCodeRead(str) {
-    let s = String(str || '').trim();
-    if (!s) return null;
-    if (s.indexOf('XC1:') === 0) s = s.slice(4);
-    let o;
-    try { o = JSON.parse(s); } catch (e) { return null; }
-    if (Array.isArray(o)) o = { records: o, tombs: {} };
-    if (!o || !Array.isArray(o.records)) return null;
-    return { records: o.records, tombs: o.tombs || {} };
-  }
-  function syncCodeApply(text) {
-    const p = syncCodeRead(text);
-    if (!p) { toast('同步码不完整或格式不对，请重新复制', true); return false; }
-    const changed = sync.apply(p);
-    if (changed) refreshAfterSync();
-    sync.schedule(200);
-    toast(changed ? '已合并，共 ' + getRecords().length + ' 条记录' : '两边已经一致，没有新记录');
-    return true;
   }
   const sync = {
     base: '', busy: false, ok: false, rev: 0, lastOk: 0, timer: null, pending: null, auto: false, lan: '',
@@ -1701,7 +1618,6 @@
         // 电脑上直接双击 index.html 打开时，默认连本机的电脑端；手机上改成电脑显示的地址
         this.base = cfg.base ? normBase(cfg.base) : 'http://127.0.0.1:7788';
       }
-      $('syncUrl').value = this.base;
       syncPoke = () => { this.schedule(600); if (cloud.token) cloud.schedule(3000); };
       updateSyncUI();
       if (this.auto) {
@@ -1711,15 +1627,6 @@
           .catch(() => {});
       }
       this.start();
-    },
-    setBase(u, save) {
-      this.base = normBase(u);
-      if (save) writeSyncCfg({ base: this.base });
-      $('syncUrl').value = this.base;
-      this.ok = false;
-      updateSyncUI();
-      this.start();
-      this.round(true);
     },
     start() {
       clearInterval(this.timer);
@@ -1822,7 +1729,7 @@
     if (!st || !tx) return;
     if (!cloud.token) {
       st.className = 'sync-state off';
-      tx.textContent = '未配置云同步（不填也能用，跨网可手动复制同步码）';
+      tx.textContent = '未开启（填一次 token 即可，自动记住）';
       return;
     }
     if (cloud.busy) {
@@ -1835,7 +1742,7 @@
       tx.textContent = '云同步已开' + (cloud.user ? ' · @' + cloud.user : '') + ' · 最近 ' + fmtTime(cloud.last) + ' · 每 60 秒自动一次';
     } else {
       st.className = 'sync-state off';
-      tx.textContent = cloud.err ? ('云同步出错：' + cloud.err) : '云同步已配置，等待首次同步…';
+      tx.textContent = cloud.err ? ('云同步出错：' + cloud.err) : '已记住 token，正在自动同步…';
     }
   }
   const cloud = {
@@ -1848,7 +1755,10 @@
       this.last = c.last || 0;
       if ($('cloudToken')) $('cloudToken').value = this.token;
       updateCloudUI();
-      if (this.token) this.start();
+      if (this.token) {
+        this.start();
+        if (!this.user) this.whoami().catch(() => {});
+      }
     },
     save() { writeCloudCfg({ token: this.token, gistId: this.gistId, user: this.user, last: this.last }); },
     start() {
@@ -2129,36 +2039,6 @@
     $('btnMottoOk').addEventListener('click', () => { $('mottoModal').hidden = true; });
     $('mottoModal').addEventListener('click', e => { if (e.target === $('mottoModal')) $('mottoModal').hidden = true; });
 
-    // ===== 同步按钮 =====
-    $('btnSyncSave').addEventListener('click', () => sync.setBase($('syncUrl').value, true));
-    $('syncUrl').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); sync.setBase($('syncUrl').value, true); } });
-    $('btnSyncNow').addEventListener('click', () => sync.round(true));
-    $('btnSyncCopy').addEventListener('click', () => {
-      const target = syncTarget();
-      if (!target) { toast('还没有电脑地址', true); return; }
-      try {
-        navigator.clipboard.writeText(target)
-          .then(() => toast('地址已复制，发给手机即可打开'))
-          .catch(() => toast(target));
-      } catch (e) { toast(target); }
-    });
-    $('btnSyncCode').addEventListener('click', () => {
-      const code = syncCodeMake();
-      copyText(code)
-        .then(() => toast('同步码已复制（' + Math.max(1, Math.round(code.length / 1024)) + ' KB），发到微信给另一台设备'))
-        .catch(() => { prompt('长按全选，复制这段同步码：', code); });
-    });
-    $('btnSyncPaste').addEventListener('click', () => {
-      const ask = () => prompt('把另一台设备发来的同步码粘贴到这里（一般以 XC1: 开头）：', '');
-      const run = t => { if (t != null && String(t).trim()) syncCodeApply(t); };
-      try {
-        if (navigator.clipboard && navigator.clipboard.readText) {
-          navigator.clipboard.readText().then(run).catch(() => run(ask()));
-        } else {
-          run(ask());
-        }
-      } catch (e) { run(ask()); }
-    });
     // ===== 云同步按钮 =====
     $('btnCloudConnect').addEventListener('click', () => {
       const t = String($('cloudToken').value || '').trim();
@@ -2194,11 +2074,6 @@
     // ===== 安装为 App（离线可用） =====
     if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
       navigator.serviceWorker.register('sw.js').catch(() => {});
-    }
-    // 局域网 http 地址不是浏览器的"安全环境"，离线缓存不生效 —— 直接告诉用户，避免以为手机坏了
-    if (!window.isSecureContext) {
-      const hint = $('syncHint');
-      if (hint) hint.innerHTML += '<br><span style="color:#b45309">当前是局域网 http 地址：浏览器只在 https 下允许离线缓存，所以电脑不启动时这个地址打不开（记录本身在手机里，不会丢）。想不依赖电脑，见说明里的「手机完全离线」。</span>';
     }
 
     setTimeout(showDailyMotto, 600);
