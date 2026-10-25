@@ -1843,6 +1843,11 @@
           signal: ctrl.signal
         });
       } finally { clearTimeout(to); }
+      const sc2 = r.headers.get('x-oauth-scopes');
+      if (sc2 !== null) this.scope = sc2;
+      if (r.status === 404 && sc2 !== null && sc2.indexOf('repo') < 0) {
+        throw new Error('这个 token 的权限是 [' + (sc2 || '空') + ']，读写私有仓库必须勾 repo。请到 GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic) 勾上 repo 重新生成，或换一个带 repo 权限的 token。');
+      }
       if (r.status === 404) {
         try {
           await this.api('POST', '/user/repos', { name: DATA_REPO, description: DATA_DESC, private: true, auto_init: true });
@@ -2119,7 +2124,7 @@
           const sc = r.headers.get('x-oauth-scopes');
           const brief = (js && (js.message || js.login || js.full_name || js.name)) ? (js.message || js.login || js.full_name || js.name) : String(txt).replace(/\s+/g, ' ').slice(0, 60);
           log(name + ' → ' + r.status + ' · ' + (Date.now() - t0) + 'ms' + (sc !== null ? ' · 权限[' + (sc || '空') + ']' : '') + ' · ' + brief);
-          return { ok: r.ok, status: r.status, js: js, txt: txt };
+          return { ok: r.ok, status: r.status, js: js, txt: txt, scopes: sc };
         } catch (e) {
           log(name + ' → ❌ 请求失败：' + String((e && e.name) + ' ' + (e && e.message)).slice(0, 120));
           return { ok: false, status: 0 };
@@ -2131,7 +2136,13 @@
       log('   账号：' + login + (cloud.user && cloud.user !== login ? '（本地记的是 ' + cloud.user + '，已纠正）' : ''));
       if (login) { cloud.user = login; }
       const repo = await step('② 读私有仓库', 'https://api.github.com/repos/' + encodeURIComponent(login) + '/' + DATA_REPO);
-      if (repo.status === 404) log('   仓库不存在或 token 看不到它');
+      const sc = (u.scopes === null || u.scopes === undefined) ? '' : String(u.scopes);
+      if (repo.status === 404 && sc.indexOf('repo') < 0) {
+        log('❌ 这个 token 的权限是 [' + (sc || '空') + ']，读写私有仓库必须勾 repo');
+        log('   → 去 GitHub → Settings → Developer settings → Tokens (classic) 勾 repo 新建一个，或在电脑端用能用的那个 token');
+        return;
+      }
+      if (repo.status === 404) log('   仓库不存在或 token 看不到它（点「保存」会自动创建）');
       const file = await step('③ 读数据文件', 'https://api.github.com/repos/' + encodeURIComponent(login) + '/' + DATA_REPO + '/contents/' + DATA_FILE);
       const body = { message: 'diag ' + new Date().toISOString(), content: strToB64(JSON.stringify(cloudPay())) };
       if (file.ok && file.js && file.js.sha) body.sha = file.js.sha;
