@@ -452,7 +452,7 @@
     <div class="card">
       <div class="card-title">自动同步 <span style="font-weight:400;font-size:11px;color:var(--muted)">v3.1 · 私有仓库</span></div>
       <div class="sync-state off" id="cloudState"><span class="dot"></span><span id="cloudStateText">未配置</span></div>
-      <div class="small" style="line-height:1.75;margin-top:9px">数据只存在你 GitHub 账号下的一个<b>私有仓库</b>（<code>xingce-data</code>，第一次自动创建），别人搜不到也打不开。token 只需勾 <b>repo</b> 权限。</div>
+      <div class="small" style="line-height:1.75;margin-top:9px">数据只存在你 GitHub 账号下的一个<b>私有仓库</b>（<code>xingce-data</code>，第一次自动创建），别人搜不到也打不开。token 只需勾 <b>repo</b> 权限；GitHub 这类 token 有有效期（新建时「Expiration」可以选 <b>No expiration</b>），到期后这里会提示，换一个新的即可，记录不会丢。</div>
       <div class="sync-row" style="margin-top:10px">
         <input class="sync-input" id="cloudToken" type="password" autocomplete="off" spellcheck="false" placeholder="填一次 GitHub token，之后自动记住">
         <button class="btn btn-primary" id="btnCloudConnect" type="button" style="min-height:42px;padding:0 14px;font-size:13px">保存</button>
@@ -1755,13 +1755,14 @@
       tx.textContent = '云同步已开' + (cloud.user ? ' · @' + cloud.user : '') + ' · 最近 ' + fmtTime(cloud.last) + ' · 每 60 秒自动一次';
     } else {
       st.className = 'sync-state off';
-      tx.textContent = cloud.err ? ('云同步出错：' + cloud.err) : '已记住 token，正在自动同步…';
+      tx.textContent = cloud.expired ? ('⏰ ' + cloud.err) : (cloud.err ? ('云同步出错：' + cloud.err) : '已记住 token，正在自动同步…');
     }
   }
   const cloud = {
     token: '', user: '', ready: false, busy: false, ok: false, last: 0, err: '', timer: null, pending: null,
     init() {
       const c = readCloudCfg();
+      this.expired = false;
       this.token = c.token || '';
       this.user = c.user || '';
       this.ready = !!c.ready;
@@ -1774,6 +1775,7 @@
       }
     },
     save() { writeCloudCfg({ token: this.token, user: this.user, ready: this.ready, last: this.last }); },
+    resume() { this.expired = false; this.ok = false; this.err = ''; this.ready = false; this.start(); },
     start() {
       clearInterval(this.timer);
       this.timer = setInterval(() => this.round(false), 60000);
@@ -1811,7 +1813,7 @@
           const j = await res.json();
           if (j && j.message) msg += ' · ' + j.message;
         } catch (e) {}
-        if (res.status === 401) msg += '（token 无效或已过期）';
+        if (res.status === 401) msg += '（token 无效或已过期：GitHub 的 token 有有效期，重新生成一个勾 repo 的贴进来点保存就行，本机记录不会丢）';
         if (res.status === 403) msg += '（token 没有 repo 权限，或请求过于频繁）';
         if (res.status === 404) {
           msg += '：' + path;
@@ -1858,6 +1860,8 @@
           else throw e;
         }
         await new Promise(ok => setTimeout(ok, 1200));
+      } else if (r.status === 401) {
+        throw new Error('token 已过期或无效（401），去 GitHub 重新生成一个勾 repo 的，贴进来点保存就行');
       } else if (!r.ok) {
         throw new Error('HTTP ' + r.status + '（读不到私有仓库 ' + DATA_REPO + '）');
       }
@@ -1881,6 +1885,7 @@
         r = await fetch(url, { headers: this.headers(), cache: 'no-store', signal: ctrl.signal });
       } finally { clearTimeout(to); }
       if (r.status === 404) return { records: [], tombs: {}, sha: null };
+      if (r.status === 401) throw new Error('token 已过期或无效（401），去 GitHub 重新生成一个勾 repo 的，贴进来点保存就行');
       if (!r.ok) throw new Error('HTTP ' + r.status + '（读云端文件失败）');
       const j = await r.json();
       let o = null;
@@ -1920,6 +1925,7 @@
       } catch (e) {
         this.ok = false;
         this.err = (e && e.message) ? e.message : '同步失败';
+        if (/401|已过期/.test(this.err)) { this.expired = true; this.stop(); }
         updateCloudUI();
         if (manual) toast('云同步失败：' + this.err, true);
       } finally {
@@ -2097,13 +2103,15 @@
       cloud.token = t;
       cloud.ready = false;
       cloud.err = '';
+      cloud.expired = false;
       cloud.save();
       cloud.round(true);
       cloud.whoami().catch(() => {});
       cloud.start();
+      toast('已保存 token，正在同步…');
     });
     $('cloudToken').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('btnCloudConnect').click(); } });
-    $('btnCloudNow').addEventListener('click', () => cloud.round(true));
+    $('btnCloudNow').addEventListener('click', () => { if (cloud.expired) cloud.resume(); else cloud.round(true); });
     if ($('btnCloudDiag')) $('btnCloudDiag').addEventListener('click', async () => {
       const out = $('cloudDiagOut');
       out.style.display = 'block';
