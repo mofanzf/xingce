@@ -452,6 +452,7 @@
     <div class="card">
       <div class="card-title">自动同步</div>
       <div class="sync-state off" id="cloudState"><span class="dot"></span><span id="cloudStateText">未配置</span></div>
+      <div class="small" style="line-height:1.75;margin-top:9px">数据只存在你 GitHub 账号下的一个<b>私有仓库</b>（<code>xingce-data</code>，第一次自动创建），别人搜不到也打不开。token 只需勾 <b>repo</b> 权限。</div>
       <div class="sync-row" style="margin-top:10px">
         <input class="sync-input" id="cloudToken" type="password" autocomplete="off" spellcheck="false" placeholder="填一次 GitHub token，之后自动记住">
         <button class="btn btn-primary" id="btnCloudConnect" type="button" style="min-height:42px;padding:0 14px;font-size:13px">保存</button>
@@ -1701,10 +1702,23 @@
     }
   };
 
-  // ===== 跨网络：GitHub Gist 云同步 =====
+  // ===== 跨网络：GitHub 私有仓库云同步 =====
   const LS_CLOUD = 'xingce_cloud_v1';
-  const GIST_FILE = 'xingce-data.json';
-  const GIST_DESC = '行测刷题打卡 · 电脑手机同步（自动创建，勿删）';
+  const DATA_FILE = 'xingce-data.json';
+  const DATA_REPO = 'xingce-data';
+  const DATA_DESC = '行测刷题打卡 · 电脑手机同步数据（自动创建，勿删）';
+  function b64ToStr(b64) {
+    const bin = atob(String(b64 || '').replace(/\s+/g, ''));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+  function strToB64(str) {
+    const bytes = new TextEncoder().encode(str);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin);
+  }
   function readCloudCfg() {
     try { return JSON.parse(localStorage.getItem(LS_CLOUD) || '{}') || {}; } catch (e) { return {}; }
   }
@@ -1740,12 +1754,12 @@
     }
   }
   const cloud = {
-    token: '', gistId: '', user: '', busy: false, ok: false, last: 0, err: '', timer: null, pending: null,
+    token: '', user: '', ready: false, busy: false, ok: false, last: 0, err: '', timer: null, pending: null,
     init() {
       const c = readCloudCfg();
       this.token = c.token || '';
-      this.gistId = c.gistId || '';
       this.user = c.user || '';
+      this.ready = !!c.ready;
       this.last = c.last || 0;
       if ($('cloudToken')) $('cloudToken').value = this.token;
       updateCloudUI();
@@ -1754,7 +1768,7 @@
         if (!this.user) this.whoami().catch(() => {});
       }
     },
-    save() { writeCloudCfg({ token: this.token, gistId: this.gistId, user: this.user, last: this.last }); },
+    save() { writeCloudCfg({ token: this.token, user: this.user, ready: this.ready, last: this.last }); },
     start() {
       clearInterval(this.timer);
       this.timer = setInterval(() => this.round(false), 60000);
@@ -1791,7 +1805,7 @@
           if (j && j.message) msg += ' · ' + j.message;
         } catch (e) {}
         if (res.status === 401) msg += '（token 无效或已过期）';
-        if (res.status === 403) msg += '（token 没有 gist 权限，或请求过于频繁）';
+        if (res.status === 403) msg += '（token 没有 repo 权限，或请求过于频繁）';
         throw new Error(msg);
       }
       if (res.status === 204) return null;
@@ -1804,39 +1818,55 @@
       return this.user;
     },
     async ensure() {
-      if (this.gistId) return this.gistId;
-      const list = await this.api('GET', '/gists?per_page=100');
-      const hit = (list || []).filter(g => g && g.description === GIST_DESC && g.files && g.files[GIST_FILE])[0];
-      if (hit) {
-        this.gistId = hit.id;
-        this.save();
-        return this.gistId;
+      if (!this.user) await this.whoami();
+      if (!this.user) throw new Error('拿不到 GitHub 用户名');
+      if (this.ready) return;
+      const url = 'https://api.github.com/repos/' + this.user + '/' + DATA_REPO;
+      const ctrl = new AbortController();
+      const to = setTimeout(() => ctrl.abort(), 15000);
+      let r;
+      try {
+        r = await fetch(url, {
+          headers: this.headers(),
+          cache: 'no-store',
+          signal: ctrl.signal
+        });
+      } finally { clearTimeout(to); }
+      if (r.status === 404) {
+        await this.api('POST', '/user/repos', { name: DATA_REPO, description: DATA_DESC, private: true, auto_init: true });
+      } else if (!r.ok) {
+        throw new Error('HTTP ' + r.status + '（读不到私有仓库 ' + DATA_REPO + '）');
       }
-      const files = {};
-      files[GIST_FILE] = { content: JSON.stringify(cloudPay()) };
-      const g = await this.api('POST', '/gists', { description: GIST_DESC, public: false, files: files });
-      this.gistId = g.id;
+      this.ready = true;
       this.save();
-      return this.gistId;
+    },
+    headers() {
+      return {
+        'Authorization': 'Bearer ' + this.token,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      };
     },
     async pull() {
-      const g = await this.api('GET', '/gists/' + this.gistId);
-      const f = g && g.files && g.files[GIST_FILE];
-      if (!f) return { records: [], tombs: {} };
-      let txt = f.content || '';
-      if (f.truncated && f.raw_url) {
-        const r = await fetch(f.raw_url, { headers: { 'Authorization': 'Bearer ' + this.token }, cache: 'no-store' });
-        if (r.ok) txt = await r.text();
-      }
+      const url = 'https://api.github.com/repos/' + this.user + '/' + DATA_REPO + '/contents/' + DATA_FILE;
+      const ctrl = new AbortController();
+      const to = setTimeout(() => ctrl.abort(), 15000);
+      let r;
+      try {
+        r = await fetch(url, { headers: this.headers(), cache: 'no-store', signal: ctrl.signal });
+      } finally { clearTimeout(to); }
+      if (r.status === 404) return { records: [], tombs: {}, sha: null };
+      if (!r.ok) throw new Error('HTTP ' + r.status + '（读云端文件失败）');
+      const j = await r.json();
       let o = null;
-      try { o = JSON.parse(txt); } catch (e) { o = null; }
-      if (!o) return { records: [], tombs: {} };
-      return { records: Array.isArray(o.records) ? o.records : [], tombs: o.tombs || {} };
+      try { o = JSON.parse(b64ToStr(j.content)); } catch (e) { o = null; }
+      if (!o) return { records: [], tombs: {}, sha: j.sha || null };
+      return { records: Array.isArray(o.records) ? o.records : [], tombs: o.tombs || {}, sha: j.sha || null };
     },
-    async push() {
-      const files = {};
-      files[GIST_FILE] = { content: JSON.stringify(cloudPay()) };
-      await this.api('PATCH', '/gists/' + this.gistId, { files: files });
+    async push(sha) {
+      const body = { message: 'sync ' + new Date().toISOString(), content: strToB64(JSON.stringify(cloudPay())) };
+      if (sha) body.sha = sha;
+      await this.api('PUT', '/repos/' + this.user + '/' + DATA_REPO + '/contents/' + DATA_FILE, body);
     },
     async round(manual) {
       if (!this.token) { if (manual) toast('先粘贴 GitHub token 再点连接', true); return; }
@@ -1848,7 +1878,7 @@
         const remote = await this.pull();
         const changedLocal = sync.apply(remote);
         const needPush = cloudFp(getRecords(), getTombs()) !== cloudFp(remote.records, remote.tombs);
-        if (needPush) await this.push();
+        if (needPush) await this.push(remote.sha);
         this.ok = true;
         this.err = '';
         this.last = Date.now();
@@ -2039,7 +2069,7 @@
       if (!t) { toast('先粘贴 GitHub token', true); return; }
       cloud.stop();
       cloud.token = t;
-      cloud.gistId = '';
+      cloud.ready = false;
       cloud.err = '';
       cloud.save();
       cloud.round(true);
@@ -2051,7 +2081,7 @@
     $('btnCloudOff').addEventListener('click', () => {
       cloud.stop();
       cloud.token = '';
-      cloud.gistId = '';
+      cloud.ready = false;
       cloud.ok = false;
       cloud.err = '';
       cloud.save();
