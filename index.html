@@ -846,6 +846,7 @@
 
   // ===== 申论复盘 =====
   const LS_ESSAY = 'xingce_essay_v1';
+  const LS_ESSAY_TOMB = 'xingce_essay_tomb_v1';
   let slEditId = null, slImgs = [], slDetailId = null;
   function getEssays() {
     try { const a = JSON.parse(localStorage.getItem(LS_ESSAY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
@@ -855,6 +856,17 @@
     catch (e) { toast('本机存储空间不足：删掉几张旧图，或先导出备份再清理', true); return false; }
   }
   function essayById(id) { return getEssays().find(x => x.id === id) || null; }
+  function getEssayTombs() {
+    try { const o = JSON.parse(localStorage.getItem(LS_ESSAY_TOMB) || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; }
+  }
+  function addEssayTomb(id) {
+    if (!id) return;
+    const m = getEssayTombs();
+    const cut = Date.now() - 90 * 86400000;
+    Object.keys(m).forEach(k => { if ((Number(m[k]) || 0) < cut) delete m[k]; });
+    m[id] = Date.now();
+    try { localStorage.setItem(LS_ESSAY_TOMB, JSON.stringify(m)); } catch (e) {}
+  }
   function slToday() { return dateKey(Date.now()); }
   function slDateText(k) {
     const d = new Date(String(k) + 'T00:00:00');
@@ -872,19 +884,31 @@
   function slEsc(s) {
     return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   }
-  function mergeEssays(incoming) {
-    if (!Array.isArray(incoming)) return 0;
+  function mergeEssays(incoming, incomingTombs) {
+    const tombs = getEssayTombs();
+    if (incomingTombs && typeof incomingTombs === 'object') {
+      Object.keys(incomingTombs).forEach(k => {
+        const t = Number(incomingTombs[k]) || 0;
+        if (t > (Number(tombs[k]) || 0)) tombs[k] = t;
+      });
+    }
+    const kept = getEssays().filter(x => {
+      const t = Number(tombs[x.id]) || 0;
+      return !(t && t >= (x.upd || 0));
+    });
     const map = {};
-    getEssays().forEach(x => { if (x && x.id) map[x.id] = x; });
+    kept.forEach(x => { if (x && x.id) map[x.id] = x; });
     let n = 0;
-    incoming.forEach(x => {
+    if (Array.isArray(incoming)) incoming.forEach(x => {
       if (!x || !x.id) return;
+      const t = Number(tombs[x.id]) || 0;
+      if (t && t >= (x.upd || 0)) return;
       const old = map[x.id];
       if (!old || (x.upd || 0) >= (old.upd || 0)) { map[x.id] = x; n++; }
     });
-    if (!n) return 0;
-    setEssays(Object.values(map));
-    return n;
+    try { localStorage.setItem(LS_ESSAY_TOMB, JSON.stringify(tombs)); } catch (e) {}
+    if (!n && kept.length === getEssays().length) return 0;
+    return setEssays(Object.values(map)) ? n : 0;
   }
   function slRenderThumbs() {
     const box = $('slThumbs');
@@ -965,13 +989,16 @@
     if (!setEssays(l)) return;
     slCloseForm();
     renderEssays();
+    try { syncPoke(); } catch (e) {}
     toast(wasEdit ? '复盘已更新' : '复盘已保存');
   }
   function slDelete(id) {
     if (!confirm('删除这篇复盘？删了就找不回来了')) return;
+    addEssayTomb(id);
     setEssays(getEssays().filter(x => x.id !== id));
     if (slDetailId === id) slCloseDetail();
     renderEssays();
+    try { syncPoke(); } catch (e) {}
     toast('已删除');
   }
   function renderEssays() {
@@ -1878,6 +1905,7 @@
     if (name === 'records') renderRecords();
     else if (name === 'progress') renderProgressTabs();
     else if (name === 'stats') renderStats();
+    else if (name === 'essay') renderEssays();
     else renderHome();
   }
   const sync = {
@@ -1995,14 +2023,22 @@
     try { return JSON.parse(localStorage.getItem(LS_CLOUD) || '{}') || {}; } catch (e) { return {}; }
   }
   function writeCloudCfg(o) { try { localStorage.setItem(LS_CLOUD, JSON.stringify(o)); } catch (e) {} }
-  function cloudFp(records, tombs) {
+  function essayFp(list, tombs) {
+    const a = (list || []).slice()
+      .sort((x, y) => String(x.id).localeCompare(String(y.id)))
+      .map(e => [e.id, e.upd || 0, String(e.text || '').length, (e.images || []).length, String(e.title || '').length].join(':'))
+      .join(',');
+    const t = tombs || {};
+    return a + '#' + Object.keys(t).sort().map(k => k + '=' + t[k]).join(',');
+  }
+  function cloudFp(records, tombs, essays, essayTombs) {
     const a = (records || []).slice().sort((x, y) => String(x.id).localeCompare(String(y.id)));
     const t = {};
     Object.keys(tombs || {}).sort().forEach(k => { t[k] = tombs[k]; });
-    return JSON.stringify(a) + '|' + JSON.stringify(t);
+    return JSON.stringify(a) + '|' + JSON.stringify(t) + '|' + essayFp(essays, essayTombs);
   }
   function cloudPay() {
-    return { v: 1, savedAt: Date.now(), records: getRecords(), tombs: getTombs() };
+    return { v: 2, savedAt: Date.now(), records: getRecords(), tombs: getTombs(), essays: getEssays(), essayTombs: getEssayTombs() };
   }
   function updateCloudUI() {
     const st = $('cloudState'), tx = $('cloudStateText');
@@ -2151,14 +2187,20 @@
       try {
         r = await fetch(url, { headers: this.headers(), cache: 'no-store', signal: ctrl.signal });
       } finally { clearTimeout(to); }
-      if (r.status === 404) return { records: [], tombs: {}, sha: null };
+      if (r.status === 404) return { records: [], tombs: {}, essays: [], essayTombs: {}, sha: null };
       if (r.status === 401) throw new Error('token 已过期或无效（401），去 GitHub 重新生成一个勾 repo 的，贴进来点保存就行');
       if (!r.ok) throw new Error('HTTP ' + r.status + '（读云端文件失败）');
       const j = await r.json();
       let o = null;
       try { o = JSON.parse(b64ToStr(j.content)); } catch (e) { o = null; }
-      if (!o) return { records: [], tombs: {}, sha: j.sha || null };
-      return { records: Array.isArray(o.records) ? o.records : [], tombs: o.tombs || {}, sha: j.sha || null };
+      if (!o) return { records: [], tombs: {}, essays: [], essayTombs: {}, sha: j.sha || null };
+      return {
+        records: Array.isArray(o.records) ? o.records : [],
+        tombs: o.tombs || {},
+        essays: Array.isArray(o.essays) ? o.essays : [],
+        essayTombs: o.essayTombs || {},
+        sha: j.sha || null
+      };
     },
     async push(sha) {
       if (!this.user) throw new Error('还没拿到 GitHub 用户名，请点「保存」重试');
@@ -2174,8 +2216,11 @@
       try {
         await this.ensure();
         const remote = await this.pull();
-        const changedLocal = sync.apply(remote);
-        const needPush = cloudFp(getRecords(), getTombs()) !== cloudFp(remote.records, remote.tombs);
+        const changedRecords = sync.apply(remote);
+        const addedEssays = mergeEssays(remote.essays, remote.essayTombs);
+        const changedLocal = changedRecords || addedEssays > 0;
+        const needPush = cloudFp(getRecords(), getTombs(), getEssays(), getEssayTombs()) !==
+          cloudFp(remote.records, remote.tombs, remote.essays, remote.essayTombs);
         if (needPush) await this.push(remote.sha);
         this.ok = true;
         this.err = '';
