@@ -1,5 +1,5 @@
 /* 行测刷题打卡 · 离线缓存（只缓存界面，/api/ 同步请求永远走网络） */
-const CACHE = 'xingce-shell-v3';
+const CACHE = 'xingce-shell-v4';
 const ASSETS = ['./index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
