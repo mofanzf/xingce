@@ -876,6 +876,10 @@
   const imgMem = new Map();
   const pendingImg = {};      // key -> dataURL（还没传上云的）
   const imgUrlCache = new Map();
+  const LS_PEND = 'xingce_pend_imgs_v1';
+  function getPend() { try { const v = JSON.parse(localStorage.getItem(LS_PEND) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+  function addPend(k) { const l = getPend(); if (l.indexOf(k) < 0) { l.push(k); try { localStorage.setItem(LS_PEND, JSON.stringify(l)); } catch (e) {} } }
+  function delPend(k) { const l = getPend().filter(x => x !== k); try { localStorage.setItem(LS_PEND, JSON.stringify(l)); } catch (e) {} }
   const idb = {
     db: null, ok: (typeof indexedDB !== 'undefined'),
     open() {
@@ -1132,7 +1136,7 @@
       const ref = 'gh:' + key;
       pendingImg[key] = s;
       const up = await cloudPutImg(key, s);
-      if (up) delete pendingImg[key];
+      if (up) { delete pendingImg[key]; delPend(key); } else { addPend(key); }
       imgUrlCache.set(ref, s);
       out.push(ref);
     }
@@ -1169,6 +1173,7 @@
         const k = String(s).indexOf('gh:') === 0 ? String(s).slice(3) : '';
         if (!k) return;
         imgUrlCache.delete(String(s));
+        delPend(k); delete pendingImg[k];
         idb.del(k);
         cloudDelImg(k);
       });
@@ -2240,10 +2245,14 @@
     }
   }
   async function flushPendingImgs(limit) {
-    const keys = Object.keys(pendingImg).slice(0, limit || 10);
+    if (!cloud.token) return 0;
+    const keys = Array.from(new Set(Object.keys(pendingImg).concat(getPend()))).slice(0, limit || 10);
     let n = 0;
     for (const k of keys) {
-      if (await cloudPutImg(k, pendingImg[k])) { delete pendingImg[k]; n++; }
+      let d = pendingImg[k];
+      if (!d) { try { d = await idb.get(k); } catch (e) { d = null; } }
+      if (!d) { delPend(k); delete pendingImg[k]; continue; }
+      if (await cloudPutImg(k, d)) { delete pendingImg[k]; delPend(k); n++; }
     }
     return n;
   }
