@@ -170,6 +170,43 @@
   .tab.active{color:var(--accent)}
   .tab svg{width:22px;height:22px}
 
+  /* ===== 申论复盘 ===== */
+  .sl-motto{background:linear-gradient(150deg,#e7f6ef,#d9efe5);border:1px solid rgba(5,150,105,.32);border-radius:14px;padding:16px;margin-bottom:14px}
+  .sl-motto-main{font-size:16px;font-weight:800;color:var(--accent-dim);letter-spacing:.06em;line-height:1.5}
+  .sl-motto-sub{font-size:11.5px;color:var(--muted);margin-top:6px}
+  .sl-new{width:100%;min-height:46px;border-radius:12px;border:1px dashed rgba(5,150,105,.45);background:rgba(5,150,105,.05);color:var(--accent);font-size:14px;font-weight:700;cursor:pointer;margin-bottom:14px}
+  .sl-new:active{background:rgba(5,150,105,.13)}
+  .sl-text{width:100%;min-height:150px;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);color:var(--text);font-size:14px;line-height:1.75;padding:12px;outline:none;resize:vertical;font-family:var(--font)}
+  .sl-text:focus{border-color:rgba(5,150,105,.6)}
+  .sl-row{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+  .sl-row .sync-input{flex:1;min-width:0}
+  .sl-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .sl-thumb{position:relative;width:74px;height:74px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--bg)}
+  .sl-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .sl-thumb-x{position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(15,23,42,.62);color:#fff;font-size:13px;line-height:1;cursor:pointer;padding:0}
+  .sl-actions{display:flex;gap:8px;margin-top:12px}
+  .sl-item{display:block;width:100%;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 13px;margin-bottom:9px;cursor:pointer}
+  .sl-item:active{border-color:rgba(5,150,105,.45)}
+  .sl-item-top{display:flex;align-items:center;gap:8px}
+  .sl-item-date{font-size:11.5px;font-weight:700;color:var(--accent)}
+  .sl-item-tag{margin-left:auto;font-size:10.5px;color:var(--muted2);border:1px solid var(--line);border-radius:6px;padding:1px 6px}
+  .sl-item-title{font-size:14px;font-weight:700;margin-top:5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sl-item-sub{font-size:12px;color:var(--muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sl-detail{position:fixed;inset:0;z-index:70;background:var(--bg);overflow:auto;padding:0 0 40px;-webkit-overflow-scrolling:touch}
+  .sl-detail[hidden]{display:none}
+  .sl-detail-inner{max-width:520px;margin:0 auto;padding:calc(10px + env(safe-area-inset-top)) 16px 24px}
+  .sl-detail-head{display:flex;align-items:center;gap:8px;position:sticky;top:0;background:var(--bg);padding:6px 0 12px;z-index:2}
+  .sl-detail-head .btn{flex:0 0 auto;width:auto;min-height:34px;padding:0 13px;font-size:12.5px;font-weight:600;border-radius:10px}
+  .sl-detail-head .btn:last-child{margin-left:auto}
+  .sl-detail-date{flex:1 1 auto;text-align:center;font-size:13px;font-weight:700;color:var(--accent)}
+  .sl-dt-title{font-size:18px;font-weight:800;line-height:1.45;margin:6px 0 12px}
+  .sl-dt-text{font-size:14.5px;line-height:1.85;white-space:pre-wrap;word-break:break-word;color:var(--text)}
+  .sl-dt-imgs{margin-top:16px;display:flex;flex-direction:column;gap:10px}
+  .sl-dt-imgs img{width:100%;border-radius:10px;border:1px solid var(--line);display:block;cursor:zoom-in}
+  .sl-lightbox{position:fixed;inset:0;z-index:90;background:rgba(8,12,20,.94);display:flex;align-items:center;justify-content:center;padding:10px}
+  .sl-lightbox[hidden]{display:none}
+  .sl-lightbox img{max-width:100%;max-height:100%;object-fit:contain}
+
   /* ===== 弹窗 ===== */
   .modal-mask{
     position:fixed;inset:0;z-index:60;background:rgba(15,23,42,.38);
@@ -469,6 +506,39 @@
     </div>
   </section>
 
+  <!-- ===== 申论复盘 ===== -->
+  <section class="view" id="view-essay" hidden>
+    <div class="sl-motto">
+      <div class="sl-motto-main">归类提级、要点穷尽、表述保真</div>
+      <div class="sl-motto-sub">申论复盘 · 当天的题、自己的答案、要改的地方</div>
+    </div>
+    <button class="sl-new" id="btnSlNew" type="button">＋ 写今天的复盘</button>
+    <div class="card" id="slFormWrap" hidden>
+      <div class="card-title" id="slFormTitle">新增复盘</div>
+      <div class="sl-row">
+        <span class="small" style="width:34px;flex:none">日期</span>
+        <input class="sync-input" id="slDate" type="date">
+      </div>
+      <div class="sl-row">
+        <span class="small" style="width:34px;flex:none">标题</span>
+        <input class="sync-input" id="slTitle" type="text" placeholder="如：对策题 · 基层治理（可不填）">
+      </div>
+      <textarea class="sl-text" id="slText" placeholder="题目要点 / 我的答案 / 漏了什么 / 下次怎么改…"></textarea>
+      <div class="sl-thumbs" id="slThumbs" hidden></div>
+      <div class="sl-actions">
+        <button class="btn btn-ghost" id="btnSlPick" type="button">＋ 图片</button>
+        <button class="btn btn-primary" id="btnSlSave" type="button" style="flex:1">保存复盘</button>
+        <button class="btn btn-ghost" id="btnSlCancel" type="button">取消</button>
+      </div>
+      <div class="small" id="slTip" style="margin-top:9px;line-height:1.7">可以只写文字，也可以加图片（题目、范文截图都行）</div>
+      <input type="file" id="slFile" accept="image/*" multiple hidden>
+    </div>
+    <div class="card">
+      <div class="card-title">复盘列表 <span class="small" id="slCount" style="margin-left:auto;font-weight:400"></span></div>
+      <div id="slList"></div>
+    </div>
+  </section>
+
   <!-- ===== 计时页 ===== -->
   <section class="timer-view" id="timerView" hidden>
     <div class="timer-top">
@@ -523,7 +593,27 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/></svg>
     统计
   </button>
+  <button class="tab" data-tab="essay" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+    申论复盘
+  </button>
 </nav>
+
+<!-- ===== 申论复盘详情 ===== -->
+<div class="sl-detail" id="slDetail" hidden>
+  <div class="sl-detail-inner">
+    <div class="sl-detail-head">
+      <button class="btn btn-ghost" id="btnSlBack" type="button">‹ 返回</button>
+      <span class="sl-detail-date" id="slDetailDate"></span>
+      <button class="btn btn-ghost" id="btnSlDel" type="button" style="color:var(--danger)">删除</button>
+    </div>
+    <div id="slDetailBody"></div>
+    <div style="margin-top:18px">
+      <button class="btn btn-ghost" id="btnSlEdit" type="button" style="width:100%;min-height:44px">编辑这篇</button>
+    </div>
+  </div>
+</div>
+<div class="sl-lightbox" id="slLightbox" hidden><img id="slLightboxImg" alt=""></div>
 
 <!-- ===== 正确率弹窗 ===== -->
 <div class="modal-mask" id="rateModal" hidden>
@@ -754,6 +844,181 @@
     syncPoke();
   }
 
+  // ===== 申论复盘 =====
+  const LS_ESSAY = 'xingce_essay_v1';
+  let slEditId = null, slImgs = [], slDetailId = null;
+  function getEssays() {
+    try { const a = JSON.parse(localStorage.getItem(LS_ESSAY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+  }
+  function setEssays(l) {
+    try { localStorage.setItem(LS_ESSAY, JSON.stringify(l)); return true; }
+    catch (e) { toast('本机存储空间不足：删掉几张旧图，或先导出备份再清理', true); return false; }
+  }
+  function essayById(id) { return getEssays().find(x => x.id === id) || null; }
+  function slToday() { return dateKey(Date.now()); }
+  function slDateText(k) {
+    const d = new Date(String(k) + 'T00:00:00');
+    if (isNaN(d.getTime())) return String(k || '—');
+    const w = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
+    return (d.getMonth() + 1) + '月' + d.getDate() + '日 周' + w;
+  }
+  function slSort(l) {
+    return l.slice().sort((a, b) => {
+      const da = a.date || '', db = b.date || '';
+      if (da === db) return (b.upd || 0) - (a.upd || 0);
+      return da < db ? 1 : -1;
+    });
+  }
+  function slEsc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  }
+  function mergeEssays(incoming) {
+    if (!Array.isArray(incoming)) return 0;
+    const map = {};
+    getEssays().forEach(x => { if (x && x.id) map[x.id] = x; });
+    let n = 0;
+    incoming.forEach(x => {
+      if (!x || !x.id) return;
+      const old = map[x.id];
+      if (!old || (x.upd || 0) >= (old.upd || 0)) { map[x.id] = x; n++; }
+    });
+    if (!n) return 0;
+    setEssays(Object.values(map));
+    return n;
+  }
+  function slRenderThumbs() {
+    const box = $('slThumbs');
+    if (!box) return;
+    box.innerHTML = slImgs.map((src, i) =>
+      '<div class="sl-thumb"><img src="' + src + '" alt="图' + (i + 1) + '"><button class="sl-thumb-x" data-i="' + i + '" type="button" aria-label="删除">×</button></div>'
+    ).join('');
+    box.hidden = !slImgs.length;
+    $('slTip').textContent = slImgs.length
+      ? ('已选 ' + slImgs.length + ' 张图（压缩后存在本机，最多 20 张）')
+      : '可以只写文字，也可以加图片（题目、范文截图都行）';
+  }
+  function slOpenForm(id) {
+    const rec = id ? essayById(id) : null;
+    slEditId = rec ? rec.id : null;
+    slImgs = rec && Array.isArray(rec.images) ? rec.images.slice() : [];
+    $('slDate').value = rec ? (rec.date || slToday()) : slToday();
+    $('slTitle').value = rec ? (rec.title || '') : '';
+    $('slText').value = rec ? (rec.text || '') : '';
+    $('slFormWrap').hidden = false;
+    $('btnSlNew').hidden = true;
+    $('slFormTitle').textContent = slEditId ? '编辑复盘' : '新增复盘';
+    $('btnSlSave').textContent = slEditId ? '保存修改' : '保存复盘';
+    slRenderThumbs();
+    $('slFormWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => { try { $('slTitle').focus(); } catch (e) {} }, 220);
+  }
+  function slCloseForm() {
+    slEditId = null; slImgs = [];
+    $('slFormWrap').hidden = true;
+    $('btnSlNew').hidden = false;
+    $('slTitle').value = ''; $('slText').value = ''; $('slDate').value = slToday();
+    slRenderThumbs();
+  }
+  function slPickImage(file) {
+    return new Promise(resolve => {
+      const fr = new FileReader();
+      fr.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            let w = img.naturalWidth || img.width || 0;
+            let h = img.naturalHeight || img.height || 0;
+            if (!w || !h) { resolve(null); return; }
+            const max = 1000;
+            if (Math.max(w, h) > max) { const s = max / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+            const cv = document.createElement('canvas');
+            cv.width = w; cv.height = h;
+            const cx = cv.getContext('2d');
+            cx.fillStyle = '#ffffff'; cx.fillRect(0, 0, w, h);
+            cx.drawImage(img, 0, 0, w, h);
+            let q = 0.72;
+            let out = cv.toDataURL('image/jpeg', q);
+            while (out.length > 170000 && q > 0.4) { q -= 0.08; out = cv.toDataURL('image/jpeg', q); }
+            resolve(out);
+          } catch (e) { resolve(null); }
+        };
+        img.onerror = () => resolve(null);
+        img.src = String(fr.result);
+      };
+      fr.onerror = () => resolve(null);
+      fr.readAsDataURL(file);
+    });
+  }
+  function slSave() {
+    const date = $('slDate').value || slToday();
+    const title = $('slTitle').value.trim();
+    const text = $('slText').value.trim();
+    if (!title && !text && !slImgs.length) { toast('写点内容或加张图再保存', true); return; }
+    const l = getEssays();
+    const wasEdit = !!slEditId;
+    if (wasEdit) {
+      const i = l.findIndex(x => x.id === slEditId);
+      if (i > -1) l[i] = Object.assign({}, l[i], { date: date, title: title, text: text, images: slImgs.slice(), upd: Date.now() });
+    } else {
+      l.push({ id: 'sl' + Date.now() + Math.random().toString(36).slice(2, 6), date: date, title: title, text: text, images: slImgs.slice(), createdAt: Date.now(), upd: Date.now() });
+    }
+    if (!setEssays(l)) return;
+    slCloseForm();
+    renderEssays();
+    toast(wasEdit ? '复盘已更新' : '复盘已保存');
+  }
+  function slDelete(id) {
+    if (!confirm('删除这篇复盘？删了就找不回来了')) return;
+    setEssays(getEssays().filter(x => x.id !== id));
+    if (slDetailId === id) slCloseDetail();
+    renderEssays();
+    toast('已删除');
+  }
+  function renderEssays() {
+    const l = slSort(getEssays());
+    const box = $('slList');
+    if (!box) return;
+    const cnt = $('slCount');
+    if (cnt) cnt.textContent = l.length ? ('共 ' + l.length + ' 篇') : '';
+    if (!l.length) {
+      box.innerHTML = '<div class="empty">还没有申论复盘<br>点上面「写今天的复盘」开始</div>';
+      return;
+    }
+    box.innerHTML = l.map(x => {
+      const imgs = Array.isArray(x.images) ? x.images.length : 0;
+      const first = String(x.text || '').split('\n').find(s => s.trim()) || '';
+      const t = x.title || (first ? first.trim().slice(0, 18) : '（图片复盘）');
+      return '<button class="sl-item" data-id="' + slEsc(x.id) + '" type="button">' +
+        '<div class="sl-item-top"><span class="sl-item-date">' + slEsc(slDateText(x.date)) + '</span>' +
+        (imgs ? '<span class="sl-item-tag">' + imgs + ' 图</span>' : '') + '</div>' +
+        '<div class="sl-item-title">' + slEsc(t) + '</div>' +
+        (x.title && first ? '<div class="sl-item-sub">' + slEsc(first.trim().slice(0, 40)) + '</div>' : '') +
+        '</button>';
+    }).join('');
+  }
+  function slOpenDetail(id) {
+    const x = essayById(id);
+    if (!x) return;
+    slDetailId = id;
+    $('slDetailDate').textContent = slDateText(x.date);
+    let html = '';
+    if (x.title) html += '<div class="sl-dt-title">' + slEsc(x.title) + '</div>';
+    if (x.text) html += '<div class="sl-dt-text">' + slEsc(x.text) + '</div>';
+    const imgs = Array.isArray(x.images) ? x.images : [];
+    if (imgs.length) html += '<div class="sl-dt-imgs">' + imgs.map((s, i) => '<img src="' + s + '" alt="图' + (i + 1) + '">').join('') + '</div>';
+    if (!html) html = '<div class="empty">这篇没有内容</div>';
+    $('slDetailBody').innerHTML = html;
+    $('slDetail').hidden = false;
+    $('slDetail').scrollTop = 0;
+    document.body.style.overflow = 'hidden';
+  }
+  function slCloseDetail() {
+    slDetailId = null;
+    $('slDetail').hidden = true;
+    $('slLightbox').hidden = true;
+    document.body.style.overflow = '';
+  }
+
   // ===== 工具 =====
   function dateKey(ts) { const d = new Date(ts); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function fmtClock(sec) {
@@ -815,12 +1080,14 @@
 
   // ===== 视图切换 =====
   function switchTab(name) {
-    ['home', 'records', 'progress', 'stats'].forEach(v => { $('view-' + v).hidden = (v !== name); });
+    ['home', 'records', 'progress', 'stats', 'essay'].forEach(v => { $('view-' + v).hidden = (v !== name); });
+    if (name !== 'essay' && !$('slDetail').hidden) slCloseDetail();
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
     if (name === 'home') renderHome();
     if (name === 'records') renderRecords();
     if (name === 'progress') renderProgressTabs();
     if (name === 'stats') renderStats();
+    if (name === 'essay') renderEssays();
     window.scrollTo({ top: 0 });
   }
 
@@ -2043,7 +2310,7 @@
     $('btnExport').addEventListener('click', () => {
       const ta = $('backupArea');
       ta.style.display = 'block';
-      ta.value = JSON.stringify(getRecords());
+      ta.value = JSON.stringify({ app: 'xingce', v: 2, at: Date.now(), records: getRecords(), essays: getEssays() });
       ta.focus();
       ta.select();
       try {
@@ -2066,15 +2333,68 @@
       const txt = ta.value.trim();
       if (!txt) { toast('请先粘贴备份内容', true); return; }
       try {
-        const arr = JSON.parse(txt);
-        if (!Array.isArray(arr)) throw new Error('bad');
-        mergeRecords(arr);
+        const data = JSON.parse(txt);
+        let n = 0, en = 0;
+        if (Array.isArray(data)) {
+          mergeRecords(data);
+          n = data.length;
+        } else if (data && typeof data === 'object') {
+          if (Array.isArray(data.records)) { mergeRecords(data.records); n = data.records.length; }
+          en = mergeEssays(data.essays);
+        } else {
+          throw new Error('bad');
+        }
         ta.style.display = 'none';
         ta.value = '';
         importOpen = false;
         renderHome();
-        toast('导入成功，共 ' + arr.length + ' 条记录');
+        renderEssays();
+        toast('导入成功：' + n + ' 条记录' + (en ? '，' + en + ' 篇申论复盘' : ''));
       } catch (e) { toast('备份格式不正确', true); }
+    });
+
+    // ===== 申论复盘 =====
+    $('btnSlNew').addEventListener('click', () => slOpenForm(null));
+    $('btnSlSave').addEventListener('click', slSave);
+    $('btnSlCancel').addEventListener('click', slCloseForm);
+    $('btnSlPick').addEventListener('click', () => $('slFile').click());
+    $('slFile').addEventListener('change', async e => {
+      const files = Array.prototype.slice.call(e.target.files || []);
+      e.target.value = '';
+      if (!files.length) return;
+      if (slImgs.length + files.length > 20) { toast('一篇最多 20 张图', true); return; }
+      toast('正在压缩图片…');
+      for (const f of files) {
+        const d = await slPickImage(f);
+        if (d) slImgs.push(d);
+      }
+      slRenderThumbs();
+      toast('已加 ' + files.length + ' 张图');
+    });
+    $('slThumbs').addEventListener('click', e => {
+      const b = e.target.closest('.sl-thumb-x');
+      if (!b) return;
+      slImgs.splice(Number(b.getAttribute('data-i')), 1);
+      slRenderThumbs();
+    });
+    $('slList').addEventListener('click', e => {
+      const it = e.target.closest('.sl-item');
+      if (it) slOpenDetail(it.getAttribute('data-id'));
+    });
+    $('btnSlBack').addEventListener('click', slCloseDetail);
+    $('btnSlEdit').addEventListener('click', () => { const id = slDetailId; slCloseDetail(); slOpenForm(id); });
+    $('btnSlDel').addEventListener('click', () => { if (slDetailId) slDelete(slDetailId); });
+    $('slDetailBody').addEventListener('click', e => {
+      const im = e.target.closest('img');
+      if (!im) return;
+      $('slLightboxImg').src = im.src;
+      $('slLightbox').hidden = false;
+    });
+    $('slLightbox').addEventListener('click', () => { $('slLightbox').hidden = true; });
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape') return;
+      if (!$('slLightbox').hidden) { $('slLightbox').hidden = true; return; }
+      if (!$('slDetail').hidden) slCloseDetail();
     });
 
     $('progTabs').addEventListener('click', e => {
