@@ -206,6 +206,10 @@
   .sl-lightbox{position:fixed;inset:0;z-index:90;background:rgba(8,12,20,.94);display:flex;align-items:center;justify-content:center;padding:10px}
   .sl-lightbox[hidden]{display:none}
   .sl-lightbox img{max-width:100%;max-height:100%;object-fit:contain}
+  .sl-thumb img,.sl-dt-imgs img{background:#eef2f7}
+  .sl-thumb img.loading,.sl-dt-imgs img.loading{opacity:.45}
+  .sl-thumb img.miss,.sl-dt-imgs img.miss{display:none}
+  .sl-dt-imgs .imgmiss{padding:16px;border:1px dashed var(--line);border-radius:10px;font-size:12.5px;color:var(--muted);text-align:center;line-height:1.6}
 
   /* ===== 弹窗 ===== */
   .modal-mask{
@@ -856,6 +860,151 @@
     catch (e) { toast('本机存储空间不足：删掉几张旧图，或先导出备份再清理', true); return false; }
   }
   function essayById(id) { return getEssays().find(x => x.id === id) || null; }
+  async function cloudDelImg(key) {
+    if (!cloud.token || !cloud.user) return;
+    try {
+      const base = '/repos/' + cloud.user + '/' + DATA_REPO + '/contents/' + key;
+      const r = await fetch('https://api.github.com' + base, { headers: cloud.headers(), cache: 'no-store' });
+      if (!r.ok) return;
+      const j = await r.json();
+      if (!j || !j.sha) return;
+      await cloud.api('DELETE', base, { message: 'del ' + key, sha: j.sha });
+    } catch (e) {}
+  }
+  // ===== 图片：本机 IndexedDB 缓存 + GitHub 私有仓库文件 =====
+  const IMG_DIR = 'img/';
+  const imgMem = new Map();
+  const pendingImg = {};      // key -> dataURL（还没传上云的）
+  const imgUrlCache = new Map();
+  const idb = {
+    db: null, ok: (typeof indexedDB !== 'undefined'),
+    open() {
+      if (!this.ok) return Promise.reject(new Error('no idb'));
+      if (this.db) return Promise.resolve(this.db);
+      return new Promise((res, rej) => {
+        const r = indexedDB.open('xingce_img', 1);
+        r.onupgradeneeded = () => { try { r.result.createObjectStore('imgs'); } catch (e) {} };
+        r.onsuccess = () => { this.db = r.result; res(this.db); };
+        r.onerror = () => rej(r.error);
+      });
+    },
+    async get(k) {
+      if (!this.ok) return imgMem.get(k) || null;
+      try {
+        const db = await this.open();
+        return await new Promise((res, rej) => {
+          const q = db.transaction('imgs', 'readonly').objectStore('imgs').get(k);
+          q.onsuccess = () => res(q.result || null);
+          q.onerror = () => rej(q.error);
+        });
+      } catch (e) { return null; }
+    },
+    async put(k, blob) {
+      if (!this.ok) { imgMem.set(k, blob); return; }
+      try {
+        const db = await this.open();
+        await new Promise((res, rej) => {
+          const tx = db.transaction('imgs', 'readwrite');
+          tx.objectStore('imgs').put(blob, k);
+          tx.oncomplete = () => res();
+          tx.onerror = () => rej(tx.error);
+        });
+      } catch (e) { imgMem.set(k, blob); }
+    },
+    async del(k) {
+      imgMem.delete(k);
+      if (!this.ok) return;
+      try {
+        const db = await this.open();
+        await new Promise((res) => {
+          const tx = db.transaction('imgs', 'readwrite');
+          tx.objectStore('imgs').delete(k);
+          tx.oncomplete = () => res();
+          tx.onerror = () => res();
+        });
+      } catch (e) {}
+    }
+  };
+  function dataUrlToBlob(d) {
+    const s = String(d || '');
+    const i = s.indexOf(',');
+    const head = i > -1 ? s.slice(0, i) : '';
+    const b64 = i > -1 ? s.slice(i + 1) : '';
+    const mime = (head.match(/data:([^;]+)/) || [])[1] || 'image/jpeg';
+    let bin = '';
+    try { bin = atob(b64); } catch (e) { bin = ''; }
+    const arr = new Uint8Array(bin.length);
+    for (let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
+    let type = mime;
+    if (arr.length > 3 && arr[0] === 0x89 && arr[1] === 0x50 && arr[2] === 0x4E && arr[3] === 0x47) type = 'image/png';
+    else if (arr.length > 1 && arr[0] === 0xFF && arr[1] === 0xD8) type = 'image/jpeg';
+    else if (arr.length > 11 && arr[8] === 0x57 && arr[9] === 0x45 && arr[10] === 0x42 && arr[11] === 0x50) type = 'image/webp';
+    return new Blob([arr], { type: type });
+  }
+  function newImgKey() {
+    return IMG_DIR + Date.now().toString(36) + Math.random().toString(36).slice(2, 7) + '.jpg';
+  }
+  async function storeLocalImage(key, dataUrl) {
+    await idb.put(key, dataUrlToBlob(dataUrl));
+  }
+  async function imgSrcFor(ref) {
+    if (!ref) return '';
+    const s = String(ref);
+    if (s.indexOf('data:') === 0) return s;
+    if (imgUrlCache.has(s)) return imgUrlCache.get(s);
+    if (s.indexOf('gh:') !== 0) return '';
+    const key = s.slice(3);
+    if (pendingImg[key]) { imgUrlCache.set(s, pendingImg[key]); return pendingImg[key]; }
+    let blob = await idb.get(key);
+    if (!blob) blob = await cloudGetImg(key);
+    if (!blob) return '';
+    let url = '';
+    try { url = (typeof URL !== 'undefined' && URL.createObjectURL) ? URL.createObjectURL(blob) : ''; } catch (e) { url = ''; }
+    if (url) imgUrlCache.set(s, url);
+    return url;
+  }
+  async function cloudGetImg(key) {
+    if (!cloud.token || !cloud.user) return null;
+    try {
+      const r = await fetch('https://api.github.com/repos/' + cloud.user + '/' + DATA_REPO + '/contents/' + key, {
+        headers: cloud.headers(), cache: 'no-store'
+      });
+      if (!r.ok) return null;
+      const j = await r.json();
+      const blob = dataUrlToBlob('data:image/jpeg;base64,' + String(j.content || '').replace(/\s/g, ''));
+      if (!blob.size) return null;
+      await idb.put(key, blob);
+      return blob;
+    } catch (e) { return null; }
+  }
+  async function cloudPutImg(key, dataUrl) {
+    if (!cloud.token) return false;
+    try {
+      await cloud.ensure();
+      const content = String(dataUrl).slice(String(dataUrl).indexOf(',') + 1);
+      await cloud.api('PUT', '/repos/' + cloud.user + '/' + DATA_REPO + '/contents/' + key, { message: 'img ' + key, content: content });
+      return true;
+    } catch (e) { return false; }
+  }
+  function hydrateImgs(root) {
+    if (!root || !root.querySelectorAll) return;
+    const list = root.querySelectorAll('img[data-slref]');
+    Array.prototype.forEach.call(list, img => {
+      const ref = img.getAttribute('data-slref');
+      if (!ref || img.getAttribute('src')) return;
+      img.className = 'loading';
+      imgSrcFor(ref).then(u => {
+        if (u) { img.className = ''; img.setAttribute('src', u); }
+        else {
+          img.className = 'miss';
+          const ph = document.createElement('div');
+          ph.className = 'imgmiss';
+          ph.textContent = '图片还没下载到本机（连上网、token 有效时会自动加载）';
+          if (img.parentNode && img.parentNode.insertBefore) img.parentNode.insertBefore(ph, img);
+        }
+      });
+    });
+  }
   function getEssayTombs() {
     try { const o = JSON.parse(localStorage.getItem(LS_ESSAY_TOMB) || '{}'); return o && typeof o === 'object' ? o : {}; } catch (e) { return {}; }
   }
@@ -914,11 +1063,12 @@
     const box = $('slThumbs');
     if (!box) return;
     box.innerHTML = slImgs.map((src, i) =>
-      '<div class="sl-thumb"><img src="' + src + '" alt="图' + (i + 1) + '"><button class="sl-thumb-x" data-i="' + i + '" type="button" aria-label="删除">×</button></div>'
+      '<div class="sl-thumb"><img data-slref="' + slEsc(src) + '" alt="图' + (i + 1) + '"><button class="sl-thumb-x" data-i="' + i + '" type="button" aria-label="删除">×</button></div>'
     ).join('');
     box.hidden = !slImgs.length;
+    hydrateImgs(box);
     $('slTip').textContent = slImgs.length
-      ? ('已选 ' + slImgs.length + ' 张图（压缩后存在本机，最多 20 张）')
+      ? ('已选 ' + slImgs.length + ' 张图（会传到云端私有仓库，本机也留一份缓存）')
       : '可以只写文字，也可以加图片（题目、范文截图都行）';
   }
   function slOpenForm(id) {
@@ -973,11 +1123,28 @@
       fr.readAsDataURL(file);
     });
   }
-  function slSave() {
+  async function prepareImages(list) {
+    const out = [];
+    for (const s of list) {
+      if (String(s).indexOf('data:') !== 0) { out.push(s); continue; }
+      const key = newImgKey();
+      await storeLocalImage(key, s);
+      const ref = 'gh:' + key;
+      pendingImg[key] = s;
+      const up = await cloudPutImg(key, s);
+      if (up) delete pendingImg[key];
+      imgUrlCache.set(ref, s);
+      out.push(ref);
+    }
+    return out;
+  }
+  async function slSave() {
     const date = $('slDate').value || slToday();
     const title = $('slTitle').value.trim();
     const text = $('slText').value.trim();
     if (!title && !text && !slImgs.length) { toast('写点内容或加张图再保存', true); return; }
+    if (slImgs.some(s => String(s).indexOf('data:') === 0) && cloud.token) toast('正在把图片传到云端…');
+    slImgs = await prepareImages(slImgs);
     const l = getEssays();
     const wasEdit = !!slEditId;
     if (wasEdit) {
@@ -994,8 +1161,18 @@
   }
   function slDelete(id) {
     if (!confirm('删除这篇复盘？删了就找不回来了')) return;
+    const old = essayById(id);
     addEssayTomb(id);
     setEssays(getEssays().filter(x => x.id !== id));
+    if (old && Array.isArray(old.images)) {
+      old.images.forEach(s => {
+        const k = String(s).indexOf('gh:') === 0 ? String(s).slice(3) : '';
+        if (!k) return;
+        imgUrlCache.delete(String(s));
+        idb.del(k);
+        cloudDelImg(k);
+      });
+    }
     if (slDetailId === id) slCloseDetail();
     renderEssays();
     try { syncPoke(); } catch (e) {}
@@ -1032,9 +1209,10 @@
     if (x.title) html += '<div class="sl-dt-title">' + slEsc(x.title) + '</div>';
     if (x.text) html += '<div class="sl-dt-text">' + slEsc(x.text) + '</div>';
     const imgs = Array.isArray(x.images) ? x.images : [];
-    if (imgs.length) html += '<div class="sl-dt-imgs">' + imgs.map((s, i) => '<img src="' + s + '" alt="图' + (i + 1) + '">').join('') + '</div>';
+    if (imgs.length) html += '<div class="sl-dt-imgs">' + imgs.map((s, i) => '<img data-slref="' + slEsc(s) + '" alt="图' + (i + 1) + '">').join('') + '</div>';
     if (!html) html = '<div class="empty">这篇没有内容</div>';
     $('slDetailBody').innerHTML = html;
+    hydrateImgs($('slDetailBody'));
     $('slDetail').hidden = false;
     $('slDetail').scrollTop = 0;
     document.body.style.overflow = 'hidden';
@@ -2061,6 +2239,35 @@
       tx.textContent = cloud.expired ? ('⏰ ' + cloud.err) : (cloud.err ? ('云同步出错：' + cloud.err) : '已记住 token，正在自动同步…');
     }
   }
+  async function flushPendingImgs(limit) {
+    const keys = Object.keys(pendingImg).slice(0, limit || 10);
+    let n = 0;
+    for (const k of keys) {
+      if (await cloudPutImg(k, pendingImg[k])) { delete pendingImg[k]; n++; }
+    }
+    return n;
+  }
+  async function migrateInlineImgs(limit) {
+    if (!cloud.token) return 0;
+    let left = limit || 6, changed = 0;
+    const l = getEssays();
+    for (const x of l) {
+      const imgs = Array.isArray(x.images) ? x.images : [];
+      let touched = false;
+      for (let i = 0; i < imgs.length && left > 0; i++) {
+        if (String(imgs[i]).indexOf('data:') !== 0) continue;
+        left--;
+        const key = newImgKey();
+        await storeLocalImage(key, imgs[i]);
+        if (!await cloudPutImg(key, imgs[i])) { await idb.del(key); break; }
+        imgs[i] = 'gh:' + key;
+        touched = true; changed++;
+      }
+      if (touched) { x.images = imgs; x.upd = Date.now(); }
+    }
+    if (changed) setEssays(l);
+    return changed;
+  }
   const cloud = {
     token: '', user: '', ready: false, busy: false, ok: false, last: 0, err: '', timer: null, pending: null,
     init() {
@@ -2215,6 +2422,8 @@
       updateCloudUI();
       try {
         await this.ensure();
+        try { await flushPendingImgs(10); } catch (e) {}
+        try { await migrateInlineImgs(6); } catch (e) {}
         const remote = await this.pull();
         const changedRecords = sync.apply(remote);
         const addedEssays = mergeEssays(remote.essays, remote.essayTombs);
@@ -2400,18 +2609,19 @@
 
     // ===== 申论复盘 =====
     $('btnSlNew').addEventListener('click', () => slOpenForm(null));
-    $('btnSlSave').addEventListener('click', slSave);
+    $('btnSlSave').addEventListener('click', () => { slSave().catch(() => toast('保存失败，稍后再试', true)); });
     $('btnSlCancel').addEventListener('click', slCloseForm);
     $('btnSlPick').addEventListener('click', () => $('slFile').click());
     $('slFile').addEventListener('change', async e => {
       const files = Array.prototype.slice.call(e.target.files || []);
       e.target.value = '';
       if (!files.length) return;
-      if (slImgs.length + files.length > 20) { toast('一篇最多 20 张图', true); return; }
+      if (slImgs.length + files.length > 40) { toast('一篇最多 40 张图', true); return; }
       toast('正在压缩图片…');
       for (const f of files) {
         const d = await slPickImage(f);
         if (d) slImgs.push(d);
+        if (slImgs.length >= 40) break;
       }
       slRenderThumbs();
       toast('已加 ' + files.length + ' 张图');
