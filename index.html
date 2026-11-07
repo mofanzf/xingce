@@ -104,6 +104,16 @@
   }
   .timer-hint small{font-weight:400;font-size:12px;color:var(--muted)}
   .timer-stop-hint{margin-top:10px;text-align:center;font-size:12px;color:var(--muted2)}
+  .timer-phase{font-size:12.5px;color:var(--muted);letter-spacing:.16em;margin-bottom:10px;font-weight:600}
+  .timer-clock.count{font-size:clamp(86px,26vw,124px);line-height:1;color:var(--accent)}
+  .timer-ctl{margin-top:26px;display:flex;gap:12px;justify-content:center}
+  .timer-ctl[hidden],.timer-phase[hidden]{display:none}
+  .timer-pause{
+    min-width:116px;height:46px;border-radius:999px;background:var(--panel);border:1px solid var(--line);
+    color:var(--muted);font-size:14px;font-weight:700;cursor:pointer;
+  }
+  .timer-pause:active,.timer-pause:focus{border-color:rgba(5,150,105,.55);color:var(--accent);outline:none}
+  .timer-view.paused .timer-clock{color:var(--muted2);text-shadow:none}
 
   /* ===== 记录页 ===== */
   .rec-group{margin-bottom:16px}
@@ -181,6 +191,7 @@
   .sl-row{display:flex;align-items:center;gap:9px;margin-bottom:9px}
   .sl-row .sync-input{flex:1;min-width:0}
   .sl-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+  .sl-thumbs[hidden]{display:none}
   .sl-thumb{position:relative;width:74px;height:74px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--bg)}
   .sl-thumb img{width:100%;height:100%;object-fit:cover;display:block}
   .sl-thumb-x{position:absolute;top:2px;right:2px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(15,23,42,.62);color:#fff;font-size:13px;line-height:1;cursor:pointer;padding:0}
@@ -550,13 +561,17 @@
       <button class="timer-cancel" id="btnCancelTimer" type="button">取消</button>
     </div>
     <div class="timer-mid">
+      <div class="timer-phase" id="timerPhase" hidden>准备开始</div>
       <div class="timer-clock" id="timerClock">00:00</div>
+      <div class="timer-ctl" id="timerCtl" hidden>
+        <button class="timer-pause" id="btnPauseResume" type="button">暂停</button>
+      </div>
       <div class="timer-zone" id="stopZone">
         <div class="timer-hint" id="stopBtn">
-          <span>停止计时并记录</span>
-          <small>刷完题后点击这里</small>
+          <span id="stopBtnText">停止计时并记录</span>
+          <small id="stopBtnSub">刷完题后点击这里</small>
         </div>
-        <div class="timer-stop-hint">（或点击屏幕任意位置停止）</div>
+        <div class="timer-stop-hint" id="stopHint">（或点击屏幕任意位置停止）</div>
       </div>
     </div>
   </section>
@@ -1325,48 +1340,122 @@
     }).join('');
   }
 
-  // ===== 计时 =====
-  const timer = { mod: null, start: 0, interval: null, locked: true };
+  // ===== 计时（3 秒倒计时 → 正计时，可暂停/继续） =====
+  const timer = { mod: null, phase: '', startTs: 0, runFrom: 0, acc: 0, countEnd: 0, interval: null, locked: true };
+  function timerElapsed() {
+    return timer.acc + (timer.phase === 'run' ? (Date.now() - timer.runFrom) : 0);
+  }
+  function timerPaint() {
+    const view = $('timerView'), clk = $('timerClock');
+    view.classList.toggle('paused', timer.phase === 'pause');
+    if (timer.phase === 'count') {
+      const left = Math.max(0, Math.ceil((timer.countEnd - Date.now()) / 1000));
+      clk.classList.add('count');
+      clk.textContent = left > 0 ? String(left) : '开始';
+      $('timerPhase').hidden = false;
+      $('timerPhase').textContent = '准备开始 · 3 秒后自动计时';
+      $('timerCtl').hidden = true;
+      $('stopBtnText').textContent = '取消这次计时';
+      $('stopBtnSub').textContent = '倒计时结束后才开始算时长';
+      $('stopHint').textContent = '（点屏幕上任意位置取消）';
+    } else if (timer.phase === 'run') {
+      clk.classList.remove('count');
+      $('timerPhase').hidden = true;
+      $('timerCtl').hidden = false;
+      $('btnPauseResume').textContent = '暂停';
+      $('stopBtnText').textContent = '停止计时并记录';
+      $('stopBtnSub').textContent = '刷完题后点击这里';
+      $('stopHint').textContent = '（或点击屏幕任意位置停止）';
+    } else if (timer.phase === 'pause') {
+      clk.classList.remove('count');
+      $('timerPhase').hidden = false;
+      $('timerPhase').textContent = '已暂停';
+      $('timerCtl').hidden = false;
+      $('btnPauseResume').textContent = '继续';
+      $('stopBtnText').textContent = '停止计时并记录';
+      $('stopBtnSub').textContent = '暂停的时间不算进时长';
+      $('stopHint').textContent = '（或点击屏幕任意位置停止）';
+    }
+  }
   function startTimer(modId) {
     const mod = modById(modId);
     timer.mod = modId;
-    timer.start = Date.now();
+    timer.phase = 'count';
+    timer.countEnd = Date.now() + 3000;
+    timer.startTs = 0;
+    timer.runFrom = 0;
+    timer.acc = 0;
     timer.locked = true;
     $('timerModuleName').textContent = mod.name;
     $('timerDot').style.background = mod.color;
     $('timerDot').style.boxShadow = '0 0 10px ' + mod.color;
     $('timerView').style.setProperty('--mc', mod.color);
-    $('timerClock').textContent = '00:00';
+    $('timerClock').textContent = '3';
     $('timerView').hidden = false;
     document.body.style.overflow = 'hidden';
     try { history.pushState({ t: 'timer' }, ''); } catch (e) { /* file:// 下不可用，忽略 */ }
-    timer.interval = setInterval(tick, 250);
-    setTimeout(() => { timer.locked = false; }, 1500);
-    tick();
+    clearInterval(timer.interval);
+    timer.interval = setInterval(tick, 100);
+    timerPaint();
   }
   function tick() {
     if (!timer.interval) return;
-    const sec = Math.floor((Date.now() - timer.start) / 1000);
-    $('timerClock').textContent = fmtClock(sec);
+    const now = Date.now();
+    if (timer.phase === 'count') {
+      if (now >= timer.countEnd) {
+        timer.phase = 'run';
+        timer.startTs = now;
+        timer.runFrom = now;
+        timer.acc = 0;
+        timer.locked = false;
+        $('timerClock').textContent = '00:00';
+        timerPaint();
+        return;
+      }
+      timerPaint();
+    } else if (timer.phase === 'run') {
+      $('timerClock').textContent = fmtClock(Math.floor(timerElapsed() / 1000));
+    }
+  }
+  function togglePause() {
+    if (timer.phase === 'run') {
+      timer.acc += Date.now() - timer.runFrom;
+      timer.phase = 'pause';
+      timerPaint();
+      toast('已暂停，点「继续」接着计时');
+    } else if (timer.phase === 'pause') {
+      timer.runFrom = Date.now();
+      timer.phase = 'run';
+      timerPaint();
+      toast('继续计时');
+    }
   }
   function stopTimer() {
-    if (timer.locked) { toast('计时刚开始，1.5 秒后再停止', true); return; }
-    const durSec = Math.max(1, Math.round((Date.now() - timer.start) / 1000));
+    if (timer.phase === 'count') { cancelTimer(); return; }
+    if (timer.phase !== 'run' && timer.phase !== 'pause') return;
+    const total = timerElapsed();
+    const durSec = Math.max(1, Math.round(total / 1000));
     const modName = modById(timer.mod).name;
-    const rec = { id: Date.now() + '' + Math.floor(Math.random() * 1000), module: timer.mod, startTs: timer.start, endTs: Date.now(), durSec: durSec, rate: null };
+    const startTs = timer.startTs || (Date.now() - total);
+    const rec = { id: Date.now() + '' + Math.floor(Math.random() * 1000), module: timer.mod, startTs: startTs, endTs: Date.now(), durSec: durSec, rate: null };
+    clearInterval(timer.interval);
+    timer.interval = null;
     addRecord(rec);
     exitTimer();
     switchTab('home');
     toast('已记录：' + modName + ' ' + fmtDur(durSec));
   }
   function cancelTimer() {
+    const counting = timer.phase === 'count';
     exitTimer();
-    toast('已取消本次计时', true);
+    toast(counting ? '已取消（还没开始计时）' : '已取消本次计时', true);
   }
   function exitTimer() {
     clearInterval(timer.interval);
     timer.interval = null;
+    timer.phase = '';
     $('timerView').hidden = true;
+    $('timerView').classList.remove('paused');
     document.body.style.overflow = '';
     try { if (history.state && history.state.t) history.back(); } catch (e) { /* file:// 下不可用，忽略 */ }
   }
@@ -2508,6 +2597,7 @@
 
     $('timerView').addEventListener('click', e => {
       if (e.target.closest('.timer-cancel')) { cancelTimer(); return; }
+      if (e.target.closest('#btnPauseResume')) { togglePause(); return; }
       stopTimer();
     });
     window.addEventListener('popstate', () => { if (!$('timerView').hidden) cancelTimer(); });
