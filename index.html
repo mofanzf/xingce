@@ -315,6 +315,24 @@
   }
   .mock-stop:active{filter:brightness(.9)}
   .mock-stop-hint{text-align:center;font-size:12px;color:#a6b4c6;margin-top:9px}
+  .mock-phase{font-size:12.5px;color:#93a4ba;letter-spacing:.16em;margin-bottom:2px}
+  .mock-clock.count{font-size:clamp(86px,26vw,124px);line-height:1.05}
+  .mock-view.paused .mock-clock{color:#a6b4c6}
+  .mock-pause{
+    min-width:116px;height:42px;border-radius:999px;background:#fff;border:1px solid #dbe3ee;
+    color:#5d6f83;font-size:14px;font-weight:700;margin-top:20px;cursor:pointer;
+  }
+  .mock-pause:active{border-color:#1d3a5f;color:#1d3a5f}
+  .sl-presets{display:flex;gap:8px;margin-top:10px}
+  .sl-presets button{
+    flex:1;height:38px;border-radius:10px;background:var(--bg);border:1px solid var(--line);
+    color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;
+  }
+  .sl-presets button:active{border-color:var(--accent);color:var(--accent)}
+  .sl-stat-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px dashed var(--line);font-size:13px;color:var(--muted)}
+  .sl-stat-row:last-of-type{border-bottom:none}
+  .sl-stat-row .v{font-weight:800;color:var(--accent);font-family:var(--mono);text-align:right}
+  .sl-stat-row .v em{font-style:normal;font-size:11px;color:var(--muted2);font-weight:400}
 
   .mock-choice{
     width:100%;min-height:62px;border-radius:13px;background:var(--bg);
@@ -493,6 +511,10 @@
       <div id="rateList"></div>
     </div>
     <div class="card">
+      <div class="card-title">申论（小题 / 大作文）</div>
+      <div id="shenlunStats"></div>
+    </div>
+    <div class="card">
       <div class="card-title">数据备份</div>
       <div class="small" style="line-height:1.8;margin-bottom:10px">换手机、清理浏览器数据前先导出备份；恢复时粘贴备份内容导入。</div>
       <div style="display:flex;gap:9px">
@@ -583,13 +605,14 @@
       <button class="mock-cancel" id="btnCancelMock" type="button">取消</button>
     </div>
     <div class="mock-mid">
-      <div class="mock-label">模拟真实考场 · 倒计时</div>
+      <div class="mock-phase" id="mockPhase" hidden>准备开始</div>
       <div class="mock-clock" id="mockClock">105:00</div>
       <div class="mock-total" id="mockTotalInfo"></div>
+      <button class="mock-pause" id="mockPauseBtn" type="button" hidden>暂停</button>
     </div>
     <div class="mock-bottom">
       <button class="mock-stop" id="mockStop" type="button">结束考试并记录</button>
-      <div class="mock-stop-hint">（或点击屏幕任意位置结束，自动保存记录）</div>
+      <div class="mock-stop-hint" id="mockStopHint">（或点击屏幕任意位置结束，自动保存记录）</div>
     </div>
   </section>
 </div>
@@ -670,12 +693,52 @@
   </div>
 </div>
 
+<!-- ===== 申论 · 记录成绩 ===== -->
+<div class="modal-mask" id="shenlunModal" hidden>
+  <div class="modal-box">
+    <div class="modal-title" id="shenlunTitle">记录申论成绩</div>
+    <div class="modal-sub" id="shenlunInfo">小题看得分率，大作文看得分</div>
+    <div class="score-grid">
+      <div class="score-field">
+        <label>小题得分率（%）</label>
+        <input id="slmRate" type="number" inputmode="numeric" min="0" max="100" placeholder="0">
+      </div>
+      <div class="score-field">
+        <label>大作文满分</label>
+        <input id="slmFull" type="number" inputmode="numeric" min="5" max="70" placeholder="40" value="40">
+      </div>
+    </div>
+    <div class="score-field" style="margin-top:10px">
+      <label>大作文得分</label>
+      <input id="slmScore" type="number" inputmode="decimal" min="0" max="70" placeholder="0">
+    </div>
+    <div class="modal-actions" style="margin-top:16px">
+      <button class="btn btn-ghost" id="btnShenlunSkip" type="button">跳过</button>
+      <button class="btn btn-primary" id="btnShenlunOk" type="button">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== 整套模考 · 选择考试类型 ===== -->
 <div class="modal-mask" id="mockModal" hidden>
   <div class="modal-box">
     <div class="modal-title">整套模考</div>
     <div class="modal-sub">选择考试类型，进入模拟倒计时，结束后自动记录</div>
     <div id="mockChoices" style="display:flex;flex-direction:column;gap:11px;margin:16px 0 6px"></div>
+    <div id="shenlunSetup" hidden>
+      <div class="small" style="margin:4px 0 8px">申论倒计时时长（分钟，自己定）</div>
+      <input class="sync-input" id="slSetupMin" type="number" inputmode="numeric" min="20" max="300" value="180" style="width:100%">
+      <div class="sl-presets" id="slPresets">
+        <button type="button" data-min="120">120</button>
+        <button type="button" data-min="150">150</button>
+        <button type="button" data-min="180">180</button>
+        <button type="button" data-min="210">210</button>
+      </div>
+      <div class="modal-actions" style="margin-top:14px">
+        <button class="btn btn-ghost" id="btnSlSetupBack" type="button">返回</button>
+        <button class="btn btn-primary" id="btnSlSetupStart" type="button">开始倒计时</button>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="btnMockCancel" type="button">取消</button>
     </div>
@@ -799,13 +862,16 @@
   ];
   // ===== 整套模考：省考 / 国考 =====
   const MOCK_MODES = [
-    { id: 'sk', name: '省考行测', short: '省考', color: '#0284c7', min: 105, full: 100,
+    { id: 'sk', name: '省考行测', short: '省考', color: '#0284c7', min: 105, full: 100, durations: [{ min: 105, tag: '预留涂卡' }, { min: 120, tag: '含涂卡' }],
       icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 8.5h8M8 12.5h8M8 16.5h5"/></svg>' },
-    { id: 'gk', name: '国考行测', short: '国考', color: '#e11d48', min: 105, full: 100,
+    { id: 'gk', name: '国考行测', short: '国考', color: '#e11d48', min: 105, full: 100, durations: [{ min: 105, tag: '预留涂卡' }, { min: 120, tag: '含涂卡' }],
       icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 8.7l5.4-.8z"/></svg>' },
     { id: 'zc', name: '职测', short: '职测', color: '#7c3aed', min: 80, full: 150,
       icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4"/><path d="M7 4h10v6a5 5 0 0 1-10 0z"/><path d="M7 6H4.5v1.5A3.5 3.5 0 0 0 8 11M17 6h2.5v1.5A3.5 3.5 0 0 1 16 11"/></svg>' },
   ];
+  // ===== 申论（倒计时自己定；成绩：小题得分率 + 大作文得分/满分） =====
+  const SHENLUN = { id: 'shenlun', name: '申论', short: '申论', color: '#b45309', min: 180, full: 40,
+    icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h13l3 3v13H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>' };
   // ===== 细分题型（言语理解 / 判断推理） =====
   const SUB_MODULES = [
     { id: 'yylj', name: '逻辑填空', parent: 'yy', color: '#f59e0b',
@@ -823,7 +889,7 @@
     { id: 'pdlj', name: '逻辑判断', parent: 'pd', color: '#65a30d',
       icon: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h14"/><path d="M13 7l5 5-5 5"/></svg>' },
   ];
-  const modById = id => MODULES.find(m => m.id === id) || SUB_MODULES.find(m => m.id === id) || MOCK_MODES.find(m => m.id === id) || MODULES[MODULES.length - 1];
+  const modById = id => id === 'shenlun' ? SHENLUN : (MODULES.find(m => m.id === id) || SUB_MODULES.find(m => m.id === id) || MOCK_MODES.find(m => m.id === id) || MODULES[MODULES.length - 1]);
 
   // ===== 数据存取 =====
   function getRecords() { try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch (e) { return []; } }
@@ -1264,7 +1330,7 @@
         Object.keys(r.rates).forEach(k => { const v = r.rates[k]; if (v != null) vals.push(v); });
       } else if (r.score != null) {
         const m = MOCK_MODES.find(x => x.id === r.module);
-        const full = m && m.full ? m.full : 100;
+        const full = r.full != null ? r.full : ((m && m.full) ? m.full : 100);
         vals.push(Math.round(r.score / full * 100));
       }
     });
@@ -1328,7 +1394,7 @@
     $('todayRate').textContent = ar == null ? '—' : ar + '%';
     const counts = {};
     records.forEach(r => { counts[r.module] = (counts[r.module] || 0) + 1; });
-    counts.qt = MOCK_MODES.reduce((a, m) => a + (counts[m.id] || 0), 0);
+    counts.qt = MOCK_MODES.reduce((a, m) => a + (counts[m.id] || 0), 0) + (counts.shenlun || 0);
     $('moduleGrid').innerHTML = MODULES.map(m => {
       let c = counts[m.id] || 0;
       SUB_MODULES.filter(x => x.parent === m.id).forEach(x => { c += counts[x.id] || 0; });
@@ -1461,13 +1527,62 @@
   }
 
   // ===== 整套模考 · 倒计时 =====
-  const mock = { mode: null, total: 0, start: 0, interval: null, locked: true };
+  const mock = { mode: null, min: 0, total: 0, start: 0, runFrom: 0, acc: 0, countEnd: 0, phase: '', interval: null, locked: true };
+  function mockElapsed() { return mock.acc + (mock.phase === 'run' ? (Date.now() - mock.runFrom) : 0); }
+  function mockPaint() {
+    const view = $('mockView'), clk = $('mockClock');
+    view.classList.toggle('paused', mock.phase === 'pause');
+    if (mock.phase === 'count') {
+      clk.classList.add('count');
+      clk.classList.remove('warn');
+      $('mockPhase').hidden = false;
+      $('mockPhase').textContent = '准备开始 · 3 秒后开考';
+      $('mockPauseBtn').hidden = true;
+      $('mockStop').textContent = '取消这次考试';
+      $('mockStopHint').textContent = '（倒计时结束后才开始计时）';
+    } else if (mock.phase === 'run') {
+      clk.classList.remove('count');
+      $('mockPhase').hidden = false;
+      $('mockPhase').textContent = '模拟真实考场 · 倒计时';
+      $('mockPauseBtn').hidden = false;
+      $('mockPauseBtn').textContent = '暂停';
+      $('mockStop').textContent = '结束考试并记录';
+      $('mockStopHint').textContent = '（或点击屏幕任意位置结束，自动保存记录）';
+    } else if (mock.phase === 'pause') {
+      clk.classList.remove('count');
+      $('mockPhase').hidden = false;
+      $('mockPhase').textContent = '已暂停';
+      $('mockPauseBtn').hidden = false;
+      $('mockPauseBtn').textContent = '继续';
+      $('mockStop').textContent = '结束考试并记录';
+      $('mockStopHint').textContent = '（暂停的时间不计入用时）';
+    }
+  }
+  function toggleMockPause() {
+    if (mock.phase === 'run') { mock.acc += Date.now() - mock.runFrom; mock.phase = 'pause'; mockPaint(); toast('已暂停，点「继续」接着考'); }
+    else if (mock.phase === 'pause') { mock.runFrom = Date.now(); mock.phase = 'run'; mockPaint(); toast('继续计时'); }
+  }
   function openMockModal() {
-    $('mockChoices').innerHTML = MOCK_MODES.map(m =>
-      '<button class="mock-choice" data-mode="' + m.id + '" type="button">' + m.name +
-      '<small>模拟真实考场 · ' + m.min + ' 分钟倒计时 · 满分 ' + m.full + ' 分</small></button>'
-    ).join('');
+    let html = '';
+    MOCK_MODES.forEach(m => {
+      const ds = m.durations || [{ min: m.min, tag: '' }];
+      ds.forEach(d => {
+        html += '<button class="mock-choice" data-mode="' + m.id + '" data-min="' + d.min + '" type="button">' + m.name + ' · ' + d.min + ' 分钟' +
+          '<small>' + (d.tag ? d.tag + ' · ' : '') + '满分 ' + m.full + ' 分</small></button>';
+      });
+    });
+    html += '<button class="mock-choice" data-mode="shenlun" type="button">申论 · 自由设置时长' +
+      '<small>点进去选分钟数，结束后记录小题得分率 / 作文得分</small></button>';
+    $('mockChoices').innerHTML = html;
+    $('mockChoices').style.display = 'flex';
+    $('shenlunSetup').hidden = true;
     $('mockModal').hidden = false;
+  }
+  function showShenlunSetup() {
+    $('mockChoices').style.display = 'none';
+    $('shenlunSetup').hidden = false;
+    $('slSetupMin').value = 180;
+    $('slSetupMin').focus();
   }
   function openSubModal(parentId) {
     const parent = modById(parentId);
@@ -1495,51 +1610,84 @@
     ).join('');
     $('changeModal').hidden = false;
   }
-  function closeMockModal() { $('mockModal').hidden = true; }
-  function startMockTimer(modeId) {
-    const mode = MOCK_MODES.find(x => x.id === modeId);
+  function closeMockModal() {
+    $('mockModal').hidden = true;
+    $('mockChoices').style.display = 'flex';
+    $('shenlunSetup').hidden = true;
+  }
+  function startMockTimer(modeId, minutes) {
+    const mode = modeId === 'shenlun' ? SHENLUN : MOCK_MODES.find(x => x.id === modeId);
     if (!mode) return;
+    const fallback = modeId === 'shenlun' ? 180 : mode.min;
+    const mins = Math.max(1, Math.min(600, Math.round(Number(minutes) || fallback)));
     mock.mode = modeId;
-    mock.total = mode.min * 60;
-    mock.start = Date.now();
+    mock.min = mins;
+    mock.total = mins * 60;
+    mock.phase = 'count';
+    mock.countEnd = Date.now() + 3000;
+    mock.start = 0;
+    mock.runFrom = 0;
+    mock.acc = 0;
     mock.locked = true;
-    $('mockModuleName').textContent = mode.name;
+    $('mockModuleName').textContent = mode.name + ' · ' + mins + ' 分钟';
     $('mockDot').style.background = mode.color;
     $('mockView').style.setProperty('--mc', mode.color);
-    $('mockClock').textContent = mode.min + ':00';
+    $('mockClock').textContent = '3';
     $('mockClock').classList.remove('warn');
-    $('mockTotalInfo').textContent = '倒计时 ' + mode.min + ' 分钟 · 满分 ' + mode.full + ' 分';
+    $('mockTotalInfo').textContent = modeId === 'shenlun'
+      ? ('倒计时 ' + mins + ' 分钟 · 结束后记 小题得分率 + 作文得分')
+      : ('倒计时 ' + mins + ' 分钟 · 满分 ' + mode.full + ' 分');
     $('mockModal').hidden = true;
+    $('mockChoices').style.display = 'flex';
+    $('shenlunSetup').hidden = true;
     $('mockView').hidden = false;
     document.body.style.overflow = 'hidden';
-    mock.interval = setInterval(mockTick, 250);
-    setTimeout(() => { mock.locked = false; }, 1500);
+    clearInterval(mock.interval);
+    mock.interval = setInterval(mockTick, 100);
+    mockPaint();
   }
   function mockTick() {
     if (!mock.interval) return;
-    const elapsed = Math.floor((Date.now() - mock.start) / 1000);
-    const remain = Math.max(0, mock.total - elapsed);
-    const m = Math.floor(remain / 60), s = remain % 60;
+    const now = Date.now();
+    if (mock.phase === 'count') {
+      if (now >= mock.countEnd) {
+        mock.phase = 'run';
+        mock.start = now;
+        mock.runFrom = now;
+        mock.acc = 0;
+        mock.locked = false;
+        $('mockClock').textContent = Math.floor(mock.total / 60) + ':' + String(mock.total % 60).padStart(2, '0');
+        mockPaint();
+        return;
+      }
+      const left = Math.max(0, Math.ceil((mock.countEnd - now) / 1000));
+      $('mockClock').textContent = left > 0 ? String(left) : '开始';
+      return;
+    }
+    const remainSec = Math.max(0, mock.total - Math.floor(mockElapsed() / 1000));
+    const m = Math.floor(remainSec / 60), s = remainSec % 60;
     $('mockClock').textContent = m + ':' + String(s).padStart(2, '0');
-    if (remain <= 60) $('mockClock').classList.add('warn');
-    if (remain <= 0) finishMock(true);
+    $('mockClock').classList.toggle('warn', mock.phase === 'run' && remainSec <= 60);
+    if (mock.phase === 'run' && remainSec <= 0) finishMock(true);
   }
   function stopMock() {
-    if (mock.locked) { toast('考试刚开始，1.5 秒后再结束', true); return; }
+    if (mock.phase === 'count') { cancelMock(); return; }
+    if (mock.phase !== 'run' && mock.phase !== 'pause') return;
     finishMock(false);
   }
   let mockPending = null;
   let mockHandled = false; // 本次模考是否已落库，防重复记录
   let scoreEditId = null;
   function finishMock(byTimeout) {
-    if (mockPending) return; // 已在等待填写成绩
-    const elapsedSec = Math.max(1, Math.round((Date.now() - mock.start) / 1000));
+    if (mockPending) return;
+    const elapsedSec = Math.max(1, Math.round(mockElapsed() / 1000));
     const durSec = Math.min(elapsedSec, mock.total);
     clearInterval(mock.interval);
     mock.interval = null;
-    mockPending = { mode: mock.mode, startTs: mock.start, durSec: durSec };
+    mockPending = { mode: mock.mode, startTs: mock.start || (Date.now() - durSec * 1000), durSec: durSec, min: mock.min };
     mockHandled = false;
-    openScoreModal(byTimeout ? '时间到！' : '考试结束', byTimeout);
+    if (mock.mode === 'shenlun') { openShenlunModal(null); return; }
+    openScoreModal(byTimeout ? '时间到！' : '考试结束');
   }
   function openScoreModal(prefix) {
     const mode = MOCK_MODES.find(x => x.id === mockPending.mode);
@@ -1639,12 +1787,62 @@
     document.body.style.overflow = '';
   }
   function cancelMock() {
-    if (mockPending) { $('scoreModal').hidden = true; mockPending = null; mockHandled = false; scoreEditId = null; }
+    if (mockPending) { $('scoreModal').hidden = true; $('shenlunModal').hidden = true; mockPending = null; mockHandled = false; scoreEditId = null; shenlunEditId = null; }
     clearInterval(mock.interval);
     mock.interval = null;
+    mock.phase = '';
     $('mockView').hidden = true;
+    $('mockView').classList.remove('paused');
+    $('mockChoices').style.display = 'flex';
+    $('shenlunSetup').hidden = true;
     document.body.style.overflow = '';
     toast('已取消本次考试', true);
+  }
+
+  // ===== 申论成绩（小题得分率 / 大作文得分） =====
+  let shenlunEditId = null;
+  function openShenlunModal(rec) {
+    shenlunEditId = rec ? rec.id : null;
+    const dur = rec ? rec.durSec : (mockPending ? mockPending.durSec : 0);
+    $('shenlunTitle').textContent = rec ? '申论成绩 · 修改' : '记录申论成绩';
+    $('shenlunInfo').textContent = (dur ? '用时 ' + fmtDur(dur) + ' · ' : '') + '小题填得分率，大作文填得分和满分';
+    $('slmRate').value = rec && rec.rate != null ? rec.rate : '';
+    $('slmFull').value = rec && rec.full != null ? rec.full : 40;
+    $('slmScore').value = rec && rec.score != null ? rec.score : '';
+    $('shenlunModal').hidden = false;
+  }
+  function closeShenlunModal() {
+    $('shenlunModal').hidden = true;
+    shenlunEditId = null;
+  }
+  function saveShenlun(skip) {
+    const rateRaw = parseFloat($('slmRate').value);
+    const fullRaw = parseFloat($('slmFull').value);
+    const scoreRaw = parseFloat($('slmScore').value);
+    const rate = (!isNaN(rateRaw) && rateRaw >= 0 && rateRaw <= 100) ? Math.round(rateRaw) : null;
+    const full = (!isNaN(fullRaw) && fullRaw >= 5 && fullRaw <= 70) ? Math.round(fullRaw) : 40;
+    const score = (!isNaN(scoreRaw) && scoreRaw >= 0) ? Math.round(scoreRaw) : null;
+    if (!skip && rate == null && score == null) { toast('小题得分率、大作文得分，至少填一个', true); return; }
+    if (!skip && score != null && score > full) { toast('大作文得分不能超过满分', true); return; }
+    if (shenlunEditId) {
+      updateRecord(shenlunEditId, { rate: rate, score: score, full: full, done: null, rates: null });
+      toast('已更新申论成绩');
+    } else if (mockPending && mockPending.mode === 'shenlun') {
+      addRecord({ id: Date.now() + '' + Math.floor(Math.random() * 1000), module: 'shenlun', startTs: mockPending.startTs, endTs: Date.now(), durSec: mockPending.durSec, rate: rate, score: score, full: full, done: null, rates: null });
+      toast('已记录申论 ' + fmtDur(mockPending.durSec));
+    } else {
+      addRecord({ id: Date.now() + '' + Math.floor(Math.random() * 1000), module: 'shenlun', startTs: Date.now(), endTs: Date.now(), durSec: 0, rate: rate, score: score, full: full, done: null, rates: null });
+      toast('已记录申论成绩');
+    }
+    mockPending = null;
+    mockHandled = false;
+    closeShenlunModal();
+    $('mockView').hidden = true;
+    document.body.style.overflow = '';
+    renderRecords();
+    renderHome();
+    if (typeof renderStats === 'function' && !$('view-stats').hidden) renderStats();
+    switchTab('records');
   }
 
   // ===== 激励语（首页每日首次弹窗，联网每天一句） =====
@@ -1708,16 +1906,28 @@
         const d = new Date(r.startTs);
         const hhmm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
         const isMock = MOCK_MODES.some(x => x.id === r.module);
-        const bodyMid = isMock
-          ? '<div class="ri-dur">完成 ' + (r.done != null ? r.done + ' 题' : '—') + ' · 用时 ' + fmtDur(r.durSec) + '</div>'
-          : '<div class="ri-dur">时长 ' + fmtDur(r.durSec) + (r.qnum != null ? ' · 练习 ' + r.qnum + ' 题' : '') + '</div>';
-        const right = isMock
-          ? (r.score != null
-              ? '<span class="ri-rate-val" data-id="' + r.id + '" data-mock="1">' + r.score + '<small>分</small></span>'
-              : '<button class="ri-rate-btn" data-id="' + r.id + '" data-mock="1" type="button">填写成绩</button>')
-          : (r.rate != null
-              ? '<span class="ri-rate-val" data-id="' + r.id + '">' + r.rate + '<small>%</small></span>'
-              : '<button class="ri-rate-btn" data-id="' + r.id + '" type="button">填写正确率</button>');
+        const isSl = r.module === 'shenlun';
+        let bodyMid, right;
+        if (isSl) {
+          const bits = [];
+          if (r.rate != null) bits.push('小题 ' + r.rate + '%');
+          if (r.score != null) bits.push('作文 ' + r.score + '/' + (r.full || 40) + '（' + Math.round(r.score / (r.full || 40) * 100) + '%）');
+          if (r.durSec) bits.push('用时 ' + fmtDur(r.durSec));
+          bodyMid = '<div class="ri-dur">' + (bits.length ? bits.join(' · ') : '未填成绩') + '</div>';
+          right = (r.rate != null || r.score != null)
+            ? '<span class="ri-rate-val" data-id="' + r.id + '" data-sl="1">' + (r.score != null ? r.score + '/' + (r.full || 40) : r.rate + '%') + '</span>'
+            : '<button class="ri-rate-btn" data-id="' + r.id + '" data-sl="1" type="button">填成绩</button>';
+        } else if (isMock) {
+          bodyMid = '<div class="ri-dur">完成 ' + (r.done != null ? r.done + ' 题' : '—') + ' · 用时 ' + fmtDur(r.durSec) + '</div>';
+          right = (r.score != null)
+            ? '<span class="ri-rate-val" data-id="' + r.id + '" data-mock="1">' + r.score + '<small>分</small></span>'
+            : '<button class="ri-rate-btn" data-id="' + r.id + '" data-mock="1" type="button">填写成绩</button>';
+        } else {
+          bodyMid = '<div class="ri-dur">时长 ' + fmtDur(r.durSec) + (r.qnum != null ? ' · 练习 ' + r.qnum + ' 题' : '') + '</div>';
+          right = (r.rate != null)
+            ? '<span class="ri-rate-val" data-id="' + r.id + '">' + r.rate + '<small>%</small></span>'
+            : '<button class="ri-rate-btn" data-id="' + r.id + '" type="button">填写正确率</button>';
+        }
         const subOf = SUB_MODULES.find(x => x.id === r.module);
         const isYyPd = !!subOf || r.module === 'yy' || r.module === 'pd';
         const chgBtn = isYyPd
@@ -1851,6 +2061,7 @@
   // ===== 统计页 =====
   function renderStats() {
     const records = getRecords();
+    renderShenlunStats(records);
     const statMods = MODULES.filter(m => m.id !== 'qt').concat(MOCK_MODES);
     $('stCount').innerHTML = records.length + '<em> 次</em>';
     $('stSec').innerHTML = Math.round(records.reduce((a, b) => a + b.durSec, 0) / 60) + '<em> 分钟</em>';
@@ -1893,6 +2104,27 @@
     rl.innerHTML = rates.length
       ? rates.map(x => '<div class="rate-row"><span class="k">' + x.name + ' <span class="small">(' + x.n + ' 次)</span></span><span class="v">' + x.avg + (x.isMock ? '分' : '%') + '</span></div>').join('')
       : '<div class="empty" style="padding:20px">填写正确率后，这里会显示各模块平均成绩</div>';
+  }
+  function renderShenlunStats(records) {
+    const box = $('shenlunStats');
+    if (!box) return;
+    const sl = records.filter(r => r.module === 'shenlun');
+    const xz = sl.filter(r => r.rate != null);
+    const dz = sl.filter(r => r.score != null && r.full).sort((x, y) => (x.startTs || 0) - (y.startTs || 0));
+    const xzAvg = xz.length ? Math.round(xz.reduce((a, b) => a + b.rate, 0) / xz.length) : null;
+    const dzPct = dz.map(r => Math.round(r.score / r.full * 100));
+    const dzAvg = dzPct.length ? Math.round(dzPct.reduce((a, b) => a + b, 0) / dzPct.length) : null;
+    const last = dz.length ? dz[dz.length - 1] : null;
+    const totalSec = sl.reduce((a, b) => a + (b.durSec || 0), 0);
+    let h = '';
+    h += '<div class="sl-stat-row"><span>小题平均得分率</span><span class="v">' + (xzAvg == null ? '—' : xzAvg + '%') + (xz.length ? ' <em>' + xz.length + ' 次</em>' : '') + '</span></div>';
+    h += '<div class="sl-stat-row"><span>大作文（最近一次）</span><span class="v">' + (last ? last.score + '/' + last.full + ' <em>' + Math.round(last.score / last.full * 100) + '%</em>' : '—') + '</span></div>';
+    h += '<div class="sl-stat-row"><span>大作文平均得分率</span><span class="v">' + (dzAvg == null ? '—' : dzAvg + '%') + (dz.length ? ' <em>' + dz.length + ' 次</em>' : '') + '</span></div>';
+    h += '<div class="sl-stat-row"><span>申论累计时长</span><span class="v">' + (totalSec ? fmtDur(totalSec) : '—') + '</span></div>';
+    h += '<div style="margin-top:12px"><button class="btn btn-ghost" id="btnSlRecord" type="button" style="width:100%;min-height:42px;font-size:13.5px">＋ 手动记一次申论成绩</button></div>';
+    box.innerHTML = h;
+    const b = $('btnSlRecord');
+    if (b) b.addEventListener('click', () => openShenlunModal(null));
   }
 
   // ===== 进步趋势页 =====
@@ -2604,18 +2836,28 @@
 
     $('mockView').addEventListener('click', e => {
       if (e.target.closest('.mock-cancel')) { cancelMock(); return; }
+      if (e.target.closest('#mockPauseBtn')) { toggleMockPause(); return; }
       stopMock();
     });
     $('mockModal').addEventListener('click', e => {
       const choice = e.target.closest('.mock-choice');
-      if (choice) { startMockTimer(choice.dataset.mode); return; }
+      if (choice) {
+        if (choice.dataset.mode === 'shenlun') { showShenlunSetup(); return; }
+        startMockTimer(choice.dataset.mode, Number(choice.dataset.min));
+        return;
+      }
+      const preset = e.target.closest('#slPresets button');
+      if (preset) { $('slSetupMin').value = preset.dataset.min; return; }
+      if (e.target.closest('#btnSlSetupBack')) { $('mockChoices').style.display = 'flex'; $('shenlunSetup').hidden = true; return; }
+      if (e.target.closest('#btnSlSetupStart')) { startMockTimer('shenlun', Number($('slSetupMin').value)); return; }
       if (e.target === $('mockModal') || e.target.closest('#btnMockCancel')) closeMockModal();
     });
 
     $('recList').addEventListener('click', e => {
       const rate = e.target.closest('.ri-rate-btn, .ri-rate-val');
       if (rate) {
-        if (rate.dataset.mock) { const r = findRecord(rate.dataset.id); if (r) openScoreModalForRecord(r); }
+        if (rate.dataset.sl) { const r = findRecord(rate.dataset.id); if (r) openShenlunModal(r); }
+        else if (rate.dataset.mock) { const r = findRecord(rate.dataset.id); if (r) openScoreModalForRecord(r); }
         else openRateModal(rate.dataset.id);
         return;
       }
@@ -2764,6 +3006,14 @@
       if (e.target !== $('scoreModal')) return;
       if (scoreEditId) { $('scoreModal').hidden = true; scoreEditId = null; mockPending = null; mockHandled = false; }
       else skipMockScore();
+    });
+
+    $('btnShenlunOk').addEventListener('click', () => saveShenlun(false));
+    $('btnShenlunSkip').addEventListener('click', () => saveShenlun(true));
+    $('shenlunModal').addEventListener('click', e => {
+      if (e.target !== $('shenlunModal')) return;
+      if (shenlunEditId) closeShenlunModal();
+      else saveShenlun(true);
     });
 
     $('btnMottoOk').addEventListener('click', () => { $('mottoModal').hidden = true; });
