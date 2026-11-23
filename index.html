@@ -828,6 +828,21 @@
         <span class="rate-suffix">得分</span>
       </div>
     </div>
+    <div id="addShenlunFields" hidden>
+      <div class="rate-input-wrap" style="margin-top:10px">
+        <input class="rate-input" id="addSlRate" type="number" inputmode="numeric" min="0" max="100" placeholder="0" value="">
+        <span class="rate-suffix">小题得分率（%）</span>
+      </div>
+      <div class="rate-input-wrap">
+        <input class="rate-input" id="addSlFull" type="number" inputmode="numeric" min="5" max="70" placeholder="40" value="40">
+        <span class="rate-suffix">大作文满分</span>
+      </div>
+      <div class="rate-input-wrap">
+        <input class="rate-input" id="addSlScore" type="number" inputmode="decimal" min="0" max="70" placeholder="0" value="">
+        <span class="rate-suffix">大作文得分</span>
+      </div>
+      <div class="rate-auto">小题和大作文可以只填一个；时长可以不填</div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" id="btnAddCancel" type="button">取消</button>
       <button class="btn btn-primary" id="btnAddOk" type="button">保存</button>
@@ -1998,19 +2013,22 @@
     const now = new Date();
     const ymd = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
     $('addDate').value = ymd;
-    ['addMin', 'addQnum', 'addErr', 'addDone', 'addScore'].forEach(id => { $(id).value = ''; });
+    ['addMin', 'addQnum', 'addErr', 'addDone', 'addScore', 'addSlRate', 'addSlScore'].forEach(id => { $(id).value = ''; });
+    $('addSlFull').value = 40;
     renderAddMods();
     $('addModal').hidden = false;
   }
   function renderAddMods() {
-    const all = MODULES.filter(m => m.id !== 'qt').concat(SUB_MODULES, MOCK_MODES);
+    const all = MODULES.filter(m => m.id !== 'qt').concat(SUB_MODULES, MOCK_MODES, [SHENLUN]);
     $('addModGrid').innerHTML = all.map(m =>
       '<div class="add-mod' + (m.id === addModule ? ' sel' : '') + '" data-mod="' + m.id + '" style="--mc:' + m.color + '">' +
       m.icon + '<span>' + m.name + '</span></div>'
     ).join('');
     const isMock = MOCK_MODES.some(x => x.id === addModule);
-    $('addNormFields').hidden = isMock;
+    const isSl = addModule === 'shenlun';
+    $('addNormFields').hidden = isMock || isSl;
     $('addMockFields').hidden = !isMock;
+    $('addShenlunFields').hidden = !isSl;
     const m = MOCK_MODES.find(x => x.id === addModule);
     $('addScore').max = m ? m.full : 100;
   }
@@ -2024,16 +2042,27 @@
   function saveAdd() {
     const mod = modById(addModule);
     const isMock = MOCK_MODES.some(x => x.id === addModule);
+    const isSl = addModule === 'shenlun';
     const ds = $('addDate').value;
     if (!ds) { toast('请选择做题日期', true); return; }
     const minRaw = parseFloat($('addMin').value);
-    if (isNaN(minRaw) || minRaw <= 0 || minRaw > 600) { toast('请输入做题时长（分钟）', true); return; }
-    const durSec = Math.round(minRaw * 60);
+    if (!isSl && (isNaN(minRaw) || minRaw <= 0 || minRaw > 600)) { toast('请输入做题时长（分钟）', true); return; }
+    const durSec = (!isNaN(minRaw) && minRaw > 0 && minRaw <= 600) ? Math.round(minRaw * 60) : 0;
     const parts = ds.split('-');
     const now = new Date();
     const startTs = new Date(+parts[0], +parts[1] - 1, +parts[2], now.getHours(), now.getMinutes(), now.getSeconds()).getTime();
     let rec;
-    if (isMock) {
+    if (isSl) {
+      const rateRaw = parseFloat($('addSlRate').value);
+      const fullRaw = parseFloat($('addSlFull').value);
+      const scoreRaw = parseFloat($('addSlScore').value);
+      const rate = (!isNaN(rateRaw) && rateRaw >= 0 && rateRaw <= 100) ? Math.round(rateRaw) : null;
+      const full = (!isNaN(fullRaw) && fullRaw >= 5 && fullRaw <= 70) ? Math.round(fullRaw) : 40;
+      if (!isNaN(scoreRaw) && scoreRaw > full) { toast('大作文得分不能超过满分', true); return; }
+      const score = (!isNaN(scoreRaw) && scoreRaw >= 0) ? Math.round(scoreRaw) : null;
+      if (rate == null && score == null) { toast('小题得分率、大作文得分，至少填一个', true); return; }
+      rec = { id: Date.now() + '' + Math.floor(Math.random() * 1000), module: 'shenlun', startTs: startTs, endTs: startTs + durSec * 1000, durSec: durSec, rate: rate, score: score, full: full, done: null, rates: null };
+    } else if (isMock) {
       const doneRaw = parseFloat($('addDone').value);
       const scoreRaw = parseFloat($('addScore').value);
       const done = (!isNaN(doneRaw) && doneRaw >= 0 && doneRaw <= 300) ? Math.round(doneRaw) : null;
@@ -2052,10 +2081,19 @@
     $('addModal').hidden = true;
     renderRecords();
     renderHome();
-    const extra = isMock
-      ? ((rec.done != null || rec.score != null) ? ' 完成' + (rec.done != null ? rec.done + '题' : '—') + (rec.score != null ? ' ' + rec.score + '分' : '') : '')
-      : (rec.rate != null ? ' 正确率 ' + rec.rate + '%' : (rec.qnum != null ? ' 练习 ' + rec.qnum + ' 题' : ''));
-    toast('已添加：' + mod.name + ' ' + dateLabel(dateKey(startTs)) + ' ' + fmtDur(durSec) + extra);
+    if (!$('view-stats').hidden) renderStats();
+    let extra = '';
+    if (isSl) {
+      const bits = [];
+      if (rec.rate != null) bits.push('小题 ' + rec.rate + '%');
+      if (rec.score != null) bits.push('作文 ' + rec.score + '/' + rec.full);
+      extra = bits.length ? ' ' + bits.join(' · ') : '';
+    } else if (isMock) {
+      extra = (rec.done != null || rec.score != null) ? ' 完成' + (rec.done != null ? rec.done + '题' : '—') + (rec.score != null ? ' ' + rec.score + '分' : '') : '';
+    } else {
+      extra = rec.rate != null ? ' 正确率 ' + rec.rate + '%' : (rec.qnum != null ? ' 练习 ' + rec.qnum + ' 题' : '');
+    }
+    toast('已添加：' + mod.name + ' ' + dateLabel(dateKey(startTs)) + (durSec ? ' ' + fmtDur(durSec) : '') + extra);
   }
 
   // ===== 统计页 =====
@@ -2121,10 +2159,8 @@
     h += '<div class="sl-stat-row"><span>大作文（最近一次）</span><span class="v">' + (last ? last.score + '/' + last.full + ' <em>' + Math.round(last.score / last.full * 100) + '%</em>' : '—') + '</span></div>';
     h += '<div class="sl-stat-row"><span>大作文平均得分率</span><span class="v">' + (dzAvg == null ? '—' : dzAvg + '%') + (dz.length ? ' <em>' + dz.length + ' 次</em>' : '') + '</span></div>';
     h += '<div class="sl-stat-row"><span>申论累计时长</span><span class="v">' + (totalSec ? fmtDur(totalSec) : '—') + '</span></div>';
-    h += '<div style="margin-top:12px"><button class="btn btn-ghost" id="btnSlRecord" type="button" style="width:100%;min-height:42px;font-size:13.5px">＋ 手动记一次申论成绩</button></div>';
+    h += '<div class="small" style="margin-top:12px;line-height:1.7">要补录申论成绩：去「记录」页点「＋ 手动添加」，选申论后分别填小题和大作文。</div>';
     box.innerHTML = h;
-    const b = $('btnSlRecord');
-    if (b) b.addEventListener('click', () => openShenlunModal(null));
   }
 
   // ===== 进步趋势页 =====
